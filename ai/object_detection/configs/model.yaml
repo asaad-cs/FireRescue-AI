@@ -1,0 +1,34 @@
+# Model configuration for the FireRescue AI object detection model.
+#
+# Architecture: Ultralytics YOLO with transfer learning from the
+# official pretrained checkpoints. No custom networks.
+
+model:
+  # YOLO model size: n (nano), s (small), m (medium), l (large), x (xlarge).
+  # Nano is the default for fast iteration on modest hardware.
+  size: n
+
+train:
+  # Total training epochs.
+  epochs: 50
+  # Square input image size in pixels.
+  image_size: 640
+  # Samples per batch; -1 lets Ultralytics auto-tune to available memory.
+  batch_size: 16
+  # Compute device: 'auto' picks cuda when available, otherwise cpu.
+  # Can also be 'cpu', 'cuda', or an explicit index like '0'.
+  device: auto
+  # Optimizer: auto, SGD, Adam, AdamW.
+  optimizer: auto
+  # Initial learning rate.
+  learning_rate: 0.01
+
+inference:
+  # Minimum confidence for a detection to be reported.
+  confidence_threshold: 0.25
+  # IoU threshold used by non-maximum suppression.
+  iou_threshold: 0.45
+
+export:
+  # Serialization format for ai/models/exports/ (onnx, torchscript, ...).
+  format: onnx

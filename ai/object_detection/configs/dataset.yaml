@@ -1,0 +1,23 @@
+# Dataset configuration for the FireRescue AI object detection model.
+#
+# Layout follows the Ultralytics YOLO convention: images live under
+# <root>/images/<split>/ and labels under <root>/labels/<split>/.
+# All paths are RELATIVE — 'root' is resolved against the ai/ directory
+# at runtime by ai/object_detection/paths.py. Never put absolute paths here.
+
+# Dataset root, relative to ai/.
+root: datasets/processed
+
+# Image directories, relative to the dataset root.
+train: images/train
+val: images/val
+test: images/test
+
+# Number of object classes; must equal the length of 'names'.
+nc: 3
+
+# Class names, index-aligned with the label files.
+names:
+  - fire
+  - smoke
+  - person

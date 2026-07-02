@@ -1,0 +1,52 @@
+# Source datasets that feed the unified fire/smoke/person dataset.
+#
+# Unified class ids (must stay aligned with configs/dataset.yaml):
+#   0 fire · 1 smoke · 2 person
+#
+# Each entry describes one dataset under datasets/raw/. 'class_map'
+# translates SOURCE class ids to UNIFIED ids; mapping a source id to
+# null drops that class. Sources whose 'root' directory is missing are
+# skipped with a warning so the pipeline runs with whatever has been
+# downloaded. See docs/dataset-manifest.md for selection rationale and
+# docs/download_instructions.md for manual downloads.
+
+sources:
+  # Fire Smoke Obstacle Dataset (CQUniversity, published on Figshare).
+  # Roboflow YOLOv8 export: train/valid/test splits, 640x640 letterboxed.
+  # Source classes: 0 fire, 1 smoke — identical to the unified ids.
+  - name: figshare_fire_smoke
+    kind: yolo
+    enabled: true
+    root: figshare_fire_smoke/extracted
+    class_map:
+      0: 0   # fire  -> fire
+      1: 1   # smoke -> smoke
+    license: CC BY 4.0
+    url: https://doi.org/10.25946/28747046
+
+  # D-Fire (Gaia solutions on demand). Manual download — see
+  # docs/download_instructions.md. Source classes: 0 smoke, 1 fire.
+  # VERIFY the class order against the downloaded README before the
+  # first merge that includes this source.
+  - name: dfire
+    kind: yolo
+    enabled: true
+    root: dfire
+    class_map:
+      0: 1   # smoke -> smoke
+      1: 0   # fire  -> fire
+    license: Research use (see repository LICENSE)
+    url: https://github.com/gaia-solutions-on-demand/DFireDataset
+
+  # COCO 2017 val split, 'person' category only. Only images containing
+  # at least one non-crowd person are merged.
+  - name: coco_person
+    kind: coco
+    enabled: true
+    root: coco_person
+    images: val2017
+    annotations: annotations/instances_val2017.json
+    categories:
+      person: 2
+    license: CC BY 4.0 (annotations); images retain original Flickr terms
+    url: https://cocodataset.org/#download

@@ -94,3 +94,20 @@ logs/
 
 # ─── Claude Code local config ─────────────────────────────
 .claude/settings.local.json
+
+# ─── AI module artifacts (track structure, not contents) ──
+ai/*/datasets/raw/*
+ai/*/datasets/processed/*
+ai/*/datasets/external/*
+ai/*/datasets/merged/*
+ai/*/models/checkpoints/*
+ai/*/models/exports/*
+ai/*/models/predictions/
+yolov8*.pt
+!ai/*/datasets/raw/.gitkeep
+!ai/*/datasets/processed/.gitkeep
+!ai/*/datasets/external/.gitkeep
+!ai/*/datasets/merged/.gitkeep
+!ai/*/models/checkpoints/.gitkeep
+!ai/*/models/exports/.gitkeep
+.ipynb_checkpoints/

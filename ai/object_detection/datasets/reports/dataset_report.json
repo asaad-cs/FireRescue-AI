@@ -1,0 +1,46 @@
+{
+  "name": "processed",
+  "root": "C:\\Users\\Administrator\\Desktop\\FireRescue-AI\\ai\\object_detection\\datasets\\processed",
+  "checked_at": "2026-07-02T21:07:07+00:00",
+  "deep_checked": false,
+  "nc": 3,
+  "names": [
+    "fire",
+    "smoke",
+    "person"
+  ],
+  "totals": {
+    "images": 12545,
+    "labels": 12545,
+    "annotations": 32783,
+    "negatives": 2,
+    "errors": 0,
+    "warnings": 2
+  },
+  "split_image_counts": {
+    "test": 1255,
+    "train": 8781,
+    "val": 2509
+  },
+  "class_counts": {
+    "fire": 12043,
+    "smoke": 9963,
+    "person": 10777
+  },
+  "issues": {
+    "corrupted_images": [],
+    "unsupported_formats": [],
+    "malformed_labels": [],
+    "missing_labels": [],
+    "orphan_labels": [],
+    "invalid_class_ids": [],
+    "out_of_bounds_boxes": [],
+    "duplicated_annotations": [],
+    "empty_labels": [
+      "test/figshare_fire_smoke__937_jpg.rf.ed5ada21f7d6a324aa17c59805e2000b.jpg",
+      "train/figshare_fire_smoke__H_00980_png.rf.4d84d566b0beb02f02eaa97e20bb63df.jpg"
+    ],
+    "duplicated_images": []
+  },
+  "is_clean": true
+}

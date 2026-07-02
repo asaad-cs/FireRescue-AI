@@ -1,0 +1,13 @@
+# AI module dependencies (Version 2 — training infrastructure).
+# Separate from the backend's requirements.txt on purpose: the MVP
+# runs without any of these installed.
+#
+# Install:  pip install -r ai/requirements.txt
+
+ultralytics>=8.2.0
+torch>=2.2.0
+torchvision>=0.17.0
+opencv-python>=4.9.0
+numpy>=1.26.0
+matplotlib>=3.8.0
+pyyaml>=6.0

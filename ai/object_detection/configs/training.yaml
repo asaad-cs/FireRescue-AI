@@ -1,0 +1,30 @@
+# Training session configuration for the FireRescue AI detector.
+#
+# Values here control the training run itself; the model and dataset
+# are described in model.yaml and dataset.yaml. No paths belong here —
+# output locations are resolved by ai/object_detection/paths.py.
+
+# Seed applied to all RNGs for reproducible runs.
+seed: 42
+
+# Dataloader worker processes. 0 is the safe default on Windows.
+workers: 0
+
+# Automatic mixed precision (AMP). Speeds up CUDA training; ignored on CPU.
+mixed_precision: true
+
+# Stop early after this many epochs without validation improvement.
+# 0 disables early stopping.
+early_stopping_patience: 10
+
+# Save a checkpoint every N epochs. -1 saves only 'last' and 'best'.
+checkpoint_frequency: -1
+
+# Experiment name; run directories are '<experiment_name>-<timestamp>'.
+experiment_name: firerescue-detector
+
+# TensorBoard log directory name, created inside each run directory.
+tensorboard_dir: tensorboard
+
+# Resume the most recent interrupted run instead of starting fresh.
+resume: false
