@@ -1,7 +1,7 @@
 # FireRescue AI — Handoff Report
 
 **Date:** 2026-07-03 (§0 — Version 2 session handoff) / 2026-07-01 (§1+ — MVP v1.0 handoff, preserved unchanged)  
-**Status:** Fully operational. All tests pass (605 BE + 50 subtests, 319 FE, tsc 0). Three verified phases pending a checkpoint commit.
+**Status:** Fully operational. All tests pass (605 BE + 50 subtests, 319 FE, tsc 0). All phases through 8I.1 committed (`v2.0-phase-8i1`, local only).
 
 ---
 
@@ -35,7 +35,7 @@
 
 ### Pending work (next session, in recommended order)
 
-1. **Checkpoint commit** of 8G/8H/8I.1 (suggested tag `v2.0-phase-8i1`) — three verified phases currently exist only in the working tree.
+1. ~~Checkpoint commit of 8G/8H/8I.1~~ — **done 2026-07-03**: commit `fe9fc19`, tag `v2.0-phase-8i1`, tests re-verified green immediately before committing; `assets/simulation_dataset/` images tracked per user decision.
 2. CUDA torch install (RTX 3060 Ti idle) + manual D-Fire download + dataset pipeline re-run + the full 50-epoch training; then threshold calibration and possibly flipping the default detector to `yolo`.
 3. Optional: camera `seed: null` entropy mode; 8I.2 UX follow-ups (responsiveness < 1400 px, box-label edge overflow, replay scrubbing); pushing checkpoints to GitHub.
 

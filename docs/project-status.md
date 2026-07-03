@@ -19,9 +19,9 @@ has delivered a complete AI vision loop:
 | 8D | First trained model (yolov8n 5-epoch smoke test, val mAP50 0.509) + verified ONNX export | Committed (`v2.0-phase-8f`) |
 | 8E | `YOLODetector` (ONNX Runtime) registered beside `ground_truth`; config-driven switching | Committed (`v2.0-phase-8f`) |
 | 8F | Simulated drone camera — real photographs into `Frame.channels["rgb"]` per zone | Committed (`v2.0-phase-8f`) |
-| 8G | Live AI Vision — analysed image + detections inside `MissionState.vision` | **Uncommitted** |
-| 8H | Permanent image library `assets/simulation_dataset/` + export tool | **Uncommitted** |
-| 8I.1 | EOC dashboard redesign — `MissionCamera` (video-ready), detection cards, ops panel | **Uncommitted** |
+| 8G | Live AI Vision — analysed image + detections inside `MissionState.vision` | Committed (`v2.0-phase-8i1`) |
+| 8H | Permanent image library `assets/simulation_dataset/` + export tool | Committed (`v2.0-phase-8i1`) |
+| 8I.1 | EOC dashboard redesign — `MissionCamera` (video-ready), detection cards, ops panel | Committed (`v2.0-phase-8i1`) |
 
 Data flow now: Simulation → CameraSimAdapter (zone → real image) →
 YOLODetector (ONNX) → DetectionResult → MissionState (incl. vision
