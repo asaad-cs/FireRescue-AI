@@ -36,8 +36,10 @@
 ### Pending work (next session, in recommended order)
 
 1. ~~Checkpoint commit of 8G/8H/8I.1~~ — **done 2026-07-03**: commit `fe9fc19`, tag `v2.0-phase-8i1`, tests re-verified green immediately before committing; `assets/simulation_dataset/` images tracked per user decision.
-2. CUDA torch install (RTX 3060 Ti idle) + manual D-Fire download + dataset pipeline re-run + the full 50-epoch training; then threshold calibration and possibly flipping the default detector to `yolo`.
-3. Optional: camera `seed: null` entropy mode; 8I.2 UX follow-ups (responsiveness < 1400 px, box-label edge overflow, replay scrubbing); pushing checkpoints to GitHub.
+2. ~~CUDA torch install~~ — **done 2026-07-03** (env-only, zero project edits): torch 2.12.1+cu130, `torch.cuda.is_available()` True, verified incl. YOLODetector ONNX inference; ai+yolo tests 270 passed.
+3. **Dataset audit done 2026-07-03** — see `ai/object_detection/datasets/reports/dataset_audit_2026-07-03.md`. Key: near-duplicate split leakage (16.9% val / 15.6% test contaminated; metrics inflated), zero fire+person co-occurrence, 2 negatives. Fix cluster-aware split + merge D-Fire BEFORE the 50-epoch run.
+4. Then: manual D-Fire download + pipeline re-run + 50-epoch training (GPU, ~1–2 min/epoch); threshold calibration; possibly flip default detector to `yolo`.
+5. Optional: camera `seed: null` entropy mode; 8I.2 UX follow-ups (responsiveness < 1400 px, box-label edge overflow, replay scrubbing); pushing checkpoints to GitHub.
 
 ---
 

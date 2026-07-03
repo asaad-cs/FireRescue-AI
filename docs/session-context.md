@@ -239,7 +239,7 @@ TypeScript: 0 errors                   (npx tsc --noEmit)
 8. **Ultralytics arg mapping.** patience=0 disables early stopping; batch=-1 auto-tunes; save_period=-1 keeps only best/last; run dirs are `<experiment>-<YYYYmmdd-HHMMSS>` under `models/checkpoints/`, layout `<run>/weights/{best,last}.pt`.
 9. **.gitignore** uses wildcard patterns (`ai/*/datasets/raw/*` etc. with `.gitkeep` exceptions, plus `yolov8*.pt`, `.ipynb_checkpoints/`) so future modules are covered automatically. `.claude/settings.local.json` is ignored.
 10. **Logger namespace** is `firerescue.ai.*` (consistent with the backend's `firerescue.*`); AI logging never imports backend settings.
-11. **CPU-only torch** is installed on this machine; `device: auto` resolves to `cpu`. Real training will be slow until a CUDA build is installed.
+11. **CUDA torch installed 2026-07-03** (env-only change, zero project edits): torch 2.12.1+cu130 + torchvision 0.27.1+cu130 (driver 591.86, RTX 3060 Ti sm_86, cuDNN 9.20 bundled — no system CUDA toolkit needed or present). `torch.cuda.is_available()` True; `select_device('auto')` → `cuda`; verified with tensor test + real YOLODetector ONNX inference (48 ms). onnxruntime remains the CPU package and the detector pins CPUExecutionProvider by design — fine at 1 s ticks.
 12. **Open item:** `npm audit` flags a dev-only esbuild/vite/vitest chain (GHSA-67mh-4wv8-2f99); the fix is a breaking Vite upgrade — user has not decided. No runtime/production exposure.
 
 ---
@@ -260,7 +260,7 @@ Version 2 (current):
 9. D-Fire is not merged yet — its download is manual (login required); the dataset has only 2 negative samples (and the camera's `safe/` category only those 2 images) until D-Fire's 9,838 negatives arrive
 10. Person images come from COCO val2017 only (≈2,700); fire+person co-occurrence is under-represented (scale-up path documented in download_instructions.md); master-library person-combination folders (fire_person/ etc.) are empty and rely on the provider's fallback chain
 11. The deployed model is the 5-epoch smoke-test baseline (val mAP50 0.509) — noticeable false positives (LOW smoke suspicions, ~0.27 spurious victim confidence in safe zones); the 50-epoch run is pending
-12. Torch is CPU-only — training is ~51 min/epoch until a CUDA build is installed (RTX 3060 Ti present); ONNX inference runs on CPU (~25–450 ms/frame, fine at 1 s ticks)
+12. Torch is now CUDA-enabled (2.12.1+cu130, RTX 3060 Ti) — training expected ~1–2 min/epoch; backend ONNX inference still runs on CPU by design (~25–450 ms/frame, fine at 1 s ticks)
 13. `perception_detector` default remains "ground_truth"; "yolo" is opt-in until the real model lands
 14. Dashboard: detection-box labels can overflow the image edge for detections near borders; layout is tuned for ≥1400 px wide screens; camera video/stream source kinds are typed but intentionally unimplemented
 15. Camera imagery repeats across missions by design (seed 42 fixed in simulation_camera.yaml; a fresh provider is built per mission) — for varied testing change the seed, or implement the recommended optional `seed: null` entropy mode
@@ -295,9 +295,11 @@ Integration path (unchanged, requires zero frozen-module edits): a learned detec
 
 > **Note:** Phases 8A–8I.1 are all complete and committed (tags `v2.0-phase-8c` / `v2.0-phase-8f` / `v2.0-phase-8i1`). Do NOT redo any of them. The system runs end-to-end: simulated camera → YOLO ONNX inference → MissionState (incl. vision payload) → redesigned EOC dashboard.
 
-**The next phase is not yet defined — wait for the user.** Recommended order:
-1. **The full training run** — install a CUDA torch build (RTX 3060 Ti 8 GB idle; ~51 min/epoch on CPU → ~1–2 min), manually download D-Fire (docs/download_instructions.md; +21.5k imgs incl. 9.8k negatives — biggest gain for smoke recall and false-positive suppression), re-run the dataset pipeline, then the committed 50-epoch config. Afterwards: threshold calibration from PR/F1 curves, consider flipping `perception_detector` default to "yolo".
-2. Possible 8I.2 UX follow-ups (user's numbering implies more UX work may come): responsive breakpoints below ~1400 px, box-label overflow at image edges, replay scrubbing controls in the timeline.
+**The next phase is not yet defined — wait for the user.** Session 2026-07-03 (later): CUDA torch installed (see decision 11) and a full dataset audit performed — **read `ai/object_detection/datasets/reports/dataset_audit_2026-07-03.md` before any training decision.** Its headline: per-image splitting leaks near-duplicates (16.9% of val / 15.6% of test have a train near-duplicate — all metrics inflated ~5–10 mAP50 pts), zero fire+person co-occurrence, only 2 negatives. Recommended order:
+1. **Cluster-aware split fix** in `data_tools/split.py` (split by perceptual-hash/scene group, not per image) — prerequisite for trustworthy metrics.
+2. **Manual D-Fire download + pipeline re-run** (docs/download_instructions.md; +21.5k imgs incl. 9,838 negatives — biggest precision win; verify its 0=smoke/1=fire order).
+3. **The full 50-epoch training run** (GPU-ready now, ~1–2 min/epoch), then threshold calibration from PR/F1 curves, consider flipping `perception_detector` default to "yolo".
+4. Possible 8I.2 UX follow-ups: responsive breakpoints below ~1400 px, box-label overflow at image edges, replay scrubbing controls in the timeline.
 
 Also pending user decisions: pushing all checkpoints to GitHub.
 
