@@ -1,6 +1,6 @@
 # FireRescue AI — Future Session Context
 
-> Paste this document at the start of any new AI session to provide complete project context without reading the repository. Last updated: 2026-07-03, end of Phase 8F (simulated camera integration).
+> Paste this document at the start of any new AI session to provide complete project context without reading the repository. Last updated: 2026-07-03, end of Phase 8I.1 (dashboard UX redesign) — session handoff.
 
 ---
 
@@ -27,13 +27,17 @@ A virtual drone explores a simulated building using breadth-first search, sensor
 | Git identity | `asaad-cs <ahmed.s.alfaidi@gmail.com>` (global config; fixed 2026-07-02 — the initial commit was amended from a placeholder identity and force-pushed with lease; the tag was moved to match) |
 | License | MIT |
 
-**Version 2 checkpoints:** annotated tags `v2.0-phase-8c` (dataset engineering) and `v2.0-phase-8f` (training + YOLO integration + simulated camera) exist locally on `main` after `c5edef9`. NOTHING has been pushed to GitHub; pushing is pending a user decision. Generated data (raw downloads, merged/, processed/, checkpoints, exports, simulation/camera/images/) is gitignored — only code, configs, docs, tests, and reports are tracked.
+**Git state (2026-07-03 handoff):** branch `main`; HEAD = `68fcc6f` = annotated tag `v2.0-phase-8f`; earlier checkpoint `09f9388` = `v2.0-phase-8c`; both after MVP `c5edef9` (`v1.0.0`). NOTHING pushed to GitHub. **IMPORTANT — the working tree holds three completed but UNCOMMITTED phases (8G live-vision dashboard, 8H image library, 8I.1 UX redesign)**; the recommended first action next session is a checkpoint commit (suggested tag `v2.0-phase-8i1`). Generated data (raw downloads, merged/, processed/, checkpoints, exports, simulation/camera/images/) is gitignored — only code, configs, docs, tests, and reports are tracked. `assets/simulation_dataset/` (50 images, ~4 MB) is deliberately NOT gitignored — the user decides at commit time whether to track the master library's images.
 
 ---
 
 ## MVP v1.0.0 — Frozen
 
-The MVP is complete and frozen. All 286 MVP backend tests, 295 frontend tests, and `tsc --noEmit` (0 errors) pass unchanged. Never modify frozen MVP logic. The ONLY exceptions ever made (Phases 8E/8F, via the officially documented integration seams) are: additive config fields in `backend/config/settings.py`, the detector registration block in `backend/main.py`, a two-line adapter-construction swap in `backend/main.py` + `backend/api/routes.py`, and NEW additive files (`perception/detectors/yolo.py`, `simulation/camera/`, `backend/ingestion/camera_adapter.py`, new test files). No existing MVP behavior changed; frontend, REST, and WebSocket contracts are untouched.
+The MVP is complete and frozen. All 286 MVP backend tests and `tsc --noEmit` (0 errors) pass unchanged. Never modify frozen MVP logic without explicit user instruction. Exceptions made so far, each explicitly user-authorized through documented seams:
+- **8E/8F:** additive settings fields, detector registration in `backend/main.py`, two-line adapter swap in `main.py` + `routes.py`, plus NEW files (`perception/detectors/yolo.py`, `simulation/camera/`, `backend/ingestion/camera_adapter.py`).
+- **8G:** additive `vision` field on `MissionState` (+ `VisionFrame`/`VisionDetection` models), an 8-line merge in `MissionManager`, one metadata pass-through line in `perception/engine.py`, mirrored `frontend/src/types/mission.ts` (the documented paired change).
+- **8I.1 (frontend-only, user-directed redesign):** new `MissionCamera`/`DetectionCards`/`MissionOpsPanel` components, restyled `TacticalMap`/`AlertPanel`/`MissionTimeline`, restructured `MainWorkspace`/`RightSidebar`.
+REST and WebSocket contracts remain untouched throughout; the frontend still receives ONLY `MissionState`. All 295 original frontend tests still pass unmodified.
 
 ### Architecture (unchanged)
 
@@ -143,6 +147,15 @@ Trained yolov8n for 5 epochs (in-memory override of the committed 50; configs un
 ### Phase 8F — Simulated camera (complete, 2026-07-03)
 `simulation/camera/` (provider.py + simulation_camera.yaml): zones map to folders of real photographs by scenario hazard level + victim presence (+ per-zone overrides), with seeded deterministic random selection, LRU cache, and fallback chain. `backend/ingestion/camera_adapter.py`: `CameraSimAdapter` DataSource-decorator attaches `frame.channels["rgb"]`; `make_data_source()` used by main.py AND the routes.py restart path. Controlled by `settings.camera_enabled` / `camera_config_path`; any problem degrades to plain SimAdapter. Populate the (gitignored) image library with `python -m ai.object_detection.data_tools.export_sim_images`. Live-verified: with `perception_detector="yolo"` the model detected the warehouse victim at 0.85 from an actual image. 34 tests.
 
+### Phase 8G — Live AI Vision dashboard (complete 2026-07-03, UNCOMMITTED)
+The operator sees what the AI sees. `YOLODetector` adds a `vision` payload (base64-JPEG of the exact analysed image + detections + inference ms + model facts) to `DetectionResult.metadata`; the engine passes metadata through; `MissionManager` lifts it into the new optional `MissionState.vision` (`VisionFrame` model). The image travels INSIDE MissionState, so replay and history work for free and no inference ever runs twice. GroundTruth mode → `vision: null` → dashboard fallback. Per-frame cost: one JPEG encode (~5 ms), ~60–120 KB per WS push. 10 backend tests (`backend/tests/test_vision_state.py`).
+
+### Phase 8H — Permanent simulation image library (complete 2026-07-03, UNCOMMITTED)
+`assets/simulation_dataset/` is the permanent master library (categories × scene sub-folders per its README; 50 dataset-sourced images seeded into `dataset/` sub-folders). `simulation/camera/images/` is now a GENERATED runtime folder, rebuilt via `python -m ai.object_detection.data_tools.export_simulation_library` (`--categories --subcategories --limit --random --seed --overwrite --clean`). Regeneration proven content-exact against the runtime folder; runtime folder byte-identical after the phase (zero behavior change). 17 tests.
+
+### Phase 8I.1 — Professional dashboard UX redesign (complete 2026-07-03, UNCOMMITTED, frontend-only)
+Emergency-operations-center layout: **`MissionCamera`** is the primary element, built on a `CameraMediaSource` abstraction (`image` today; `video`/`stream` kinds typed + reserved so future video needs only the `CameraMedia` switch — a deliberate video-first design decision). `DetectionCards` (🔥/🌫/👤 status cards), `MissionOpsPanel` (status, timer, rooms scanned/remaining, victims, hazards, detector/model/inference/camera source), enlarged glowing tactical map with explored-progress track, alert cards with level accent bars, polished timeline (visually ready for future replay controls). `AIVisionPanel` from 8G was superseded and removed; all its capabilities and tests were ported to `MissionCamera`. All 295 original frontend tests pass unmodified; 24 new component tests.
+
 ---
 
 ## Long-Term Multi-Model AI Architecture
@@ -180,7 +193,7 @@ ai/
 │   │   ├── training.yaml       seed: 42 · workers: 0 · AMP: true · patience: 10 · save_period: -1 · experiment: firerescue-detector · resume: false
 │   │   └── sources.yaml        raw source registry + per-source class id maps (figshare identity · dfire swap · coco person→2)
 │   ├── docs/                   dataset-manifest.md · download_instructions.md
-│   ├── data_tools/             download · image_utils · labels · coco · sources
+│   ├── data_tools/             download · image_utils · labels · coco · sources · export_sim_images · export_simulation_library
 │   │                           · validator · merge · split · build · quality · pipeline
 │   ├── datasets/
 │   │   ├── raw/                Downloads (gitignored): figshare_fire_smoke, coco_person, dfire (manual, pending)
@@ -203,12 +216,14 @@ ai/
 ## Current Test Counts (verified 2026-07-02)
 
 ```
-Backend:    578 tests + 50 subtests   (python -m pytest)
+Backend:    605 tests + 50 subtests   (python -m pytest)
             = 286 MVP + 218 AI + 40 YOLO integration + 34 camera
-Frontend:   295 tests                  (npx vitest run)
+              + 10 vision-state + 17 library-export
+Frontend:   319 tests / 17 files       (npx vitest run)
+            = 295 original MVP (unmodified) + 24 Phase 8I.1 components
 TypeScript: 0 errors                   (npx tsc --noEmit)
 ```
-(verified 2026-07-03, end of Phase 8F)
+(verified 2026-07-03, end of Phase 8I.1)
 
 ---
 
@@ -243,12 +258,13 @@ MVP (unchanged from v1.0.0):
 
 Version 2 (current):
 9. D-Fire is not merged yet — its download is manual (login required); the dataset has only 2 negative samples (and the camera's `safe/` category only those 2 images) until D-Fire's 9,838 negatives arrive
-10. Person images come from COCO val2017 only (≈2,700); fire+person co-occurrence is under-represented (scale-up path documented in download_instructions.md)
+10. Person images come from COCO val2017 only (≈2,700); fire+person co-occurrence is under-represented (scale-up path documented in download_instructions.md); master-library person-combination folders (fire_person/ etc.) are empty and rely on the provider's fallback chain
 11. The deployed model is the 5-epoch smoke-test baseline (val mAP50 0.509) — noticeable false positives (LOW smoke suspicions, ~0.27 spurious victim confidence in safe zones); the 50-epoch run is pending
-12. Torch is CPU-only — training is ~51 min/epoch until a CUDA build is installed (RTX 3060 Ti present); ONNX inference also runs on CPU (~0.3 s/frame, fine at 1 s ticks)
+12. Torch is CPU-only — training is ~51 min/epoch until a CUDA build is installed (RTX 3060 Ti present); ONNX inference runs on CPU (~25–450 ms/frame, fine at 1 s ticks)
 13. `perception_detector` default remains "ground_truth"; "yolo" is opt-in until the real model lands
-14. The dashboard does not display camera images or bounding boxes (frontend deliberately untouched)
-15. V2 work is committed locally (tags v2.0-phase-8c, v2.0-phase-8f) but not pushed
+14. Dashboard: detection-box labels can overflow the image edge for detections near borders; layout is tuned for ≥1400 px wide screens; camera video/stream source kinds are typed but intentionally unimplemented
+15. Camera imagery repeats across missions by design (seed 42 fixed in simulation_camera.yaml; a fresh provider is built per mission) — for varied testing change the seed, or implement the recommended optional `seed: null` entropy mode
+16. **Phases 8G/8H/8I.1 are uncommitted working-tree changes**; tags v2.0-phase-8c / v2.0-phase-8f exist locally only — nothing pushed
 
 ---
 
@@ -263,7 +279,10 @@ Version 2 (current):
 | 8D | First training run (5-epoch smoke test, mAP50 0.509) + verified ONNX export | Complete |
 | 8E | YOLODetector integration via DetectorRegistry (config-driven switching) | Complete |
 | 8F | Simulated drone camera (real images → Frame.channels["rgb"]) | Complete |
-| **8G** | **To be defined by the user — do not start without instruction** | **NEXT** |
+| 8G | Live AI Vision dashboard (MissionState.vision, image + boxes to operator) | Complete (uncommitted) |
+| 8H | Permanent simulation image library (assets/ master + export tool) | Complete (uncommitted) |
+| 8I.1 | Professional dashboard UX redesign (MissionCamera, EOC layout) | Complete (uncommitted) |
+| **next** | **To be defined by the user — do not start without instruction** | **NEXT** |
 | — | Fire detection, SLAM/mapping, sensor fusion modules | Future |
 
 Integration path (unchanged, requires zero frozen-module edits): a learned detector implements `BaseDetector` (`perception/base/detector.py`), loads an exported model from `ai/object_detection/models/exports/`, registers in `DetectorRegistry` alongside `ground_truth`, and is activated via `perception_detector` in `backend/config/settings.py`.
@@ -274,20 +293,22 @@ Integration path (unchanged, requires zero frozen-module edits): a learned detec
 
 ## THE EXACT NEXT TASK
 
-> **Note:** Phases 8A through 8F are all complete and committed (tags `v2.0-phase-8c`, `v2.0-phase-8f`, 2026-07-03). Do NOT redo them. The system runs end-to-end: simulated camera → YOLO ONNX inference → MissionState → dashboard.
+> **Note:** Phases 8A–8I.1 are all complete (8A–8F committed at tags `v2.0-phase-8c`/`v2.0-phase-8f`; 8G/8H/8I.1 finished, verified, and sitting UNCOMMITTED in the working tree). Do NOT redo any of them. The system runs end-to-end: simulated camera → YOLO ONNX inference → MissionState (incl. vision payload) → redesigned EOC dashboard.
 
-**Phase 8G is not yet defined — wait for the user.** The highest-value candidates, in recommended order:
-1. Install a CUDA torch build (an RTX 3060 Ti 8 GB sits idle; ~51 min/epoch → ~1–2 min) and run the full 50-epoch training on the committed config, ideally after manually downloading D-Fire (docs/download_instructions.md; +21.5k images incl. 9.8k negatives — biggest gain for smoke recall and false-positive suppression).
-2. Threshold calibration from the PR/F1 curves, then consider flipping `perception_detector` default to "yolo".
-3. Dashboard camera/detection view (frontend work — has been deliberately out of scope so far).
+**The next phase is not yet defined — wait for the user.** Recommended order:
+1. **Checkpoint commit first** — commit 8G/8H/8I.1 (suggested tag `v2.0-phase-8i1`); three verified phases are currently protected only by the filesystem. Decide whether `assets/simulation_dataset/` images (~4 MB) are tracked.
+2. **The full training run** — install a CUDA torch build (RTX 3060 Ti 8 GB idle; ~51 min/epoch on CPU → ~1–2 min), manually download D-Fire (docs/download_instructions.md; +21.5k imgs incl. 9.8k negatives — biggest gain for smoke recall and false-positive suppression), re-run the dataset pipeline, then the committed 50-epoch config. Afterwards: threshold calibration from PR/F1 curves, consider flipping `perception_detector` default to "yolo".
+3. Possible 8I.2 UX follow-ups (user's numbering implies more UX work may come): responsive breakpoints below ~1400 px, box-label overflow at image edges, replay scrubbing controls in the timeline.
 
-Also pending user decisions: pushing the checkpoints to GitHub.
+Also pending user decisions: pushing all checkpoints to GitHub.
+
+**How the demo was run this session (repo files untouched):** the committed default is `perception_detector="ground_truth"`; live demos used a throwaway launcher that overrides it to `"yolo"` in-process before starting uvicorn. To make YOLO the default, edit `backend/config/settings.py` deliberately.
 
 ---
 
 ## Documentation Status
 
-`docs/` (14 files): api-design, architecture, database, demo-guide, developer-guide, handoff-report, project-status, requirements, roadmap, session-context (this file), simulation, system-overview, tech-stack, ui-design — all reflect MVP v1.0.0. `ai/README.md` documents the V2 multi-model architecture, all commands, config semantics, expected outputs, and the module-addition recipe. Root `README.md` covers the MVP (does not yet mention `ai/` — intentional until V2 is committed/released).
+`docs/` (14 files): this file is the AUTHORITATIVE V2 context; `project-status.md` and `handoff-report.md` carry dated Version 2 sections (2026-07-03) on top of their preserved MVP content; the remaining docs (api-design, architecture, database, demo-guide, developer-guide, requirements, roadmap, simulation, system-overview, tech-stack, ui-design) reflect MVP v1.0.0 by design. `ai/README.md` documents the V2 AI workspace incl. the dataset workflow and integration. `assets/simulation_dataset/README.md` documents the master image library. `ai/object_detection/models/reports/training_report.md` documents the first training run. Root `README.md` covers the MVP only (does not yet mention `ai/` — intentional until V2 is pushed/released).
 
 ---
 

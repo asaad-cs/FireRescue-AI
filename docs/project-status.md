@@ -1,9 +1,36 @@
 # FireRescue AI — Project Status
 
-**Version:** 1.0.0  
-**Date:** 2026-07-01  
-**Current Phase:** MVP v1.0 — ALL PHASES COMPLETE AND LOCKED  
-**Overall Status:** Fully operational. 286 BE + 295 FE tests pass. 0 TypeScript errors. No debug artifacts.
+**Version:** 1.0.0 (MVP, frozen) + Version 2 in progress  
+**Date:** 2026-07-03 (MVP sections below reflect 2026-07-01)  
+**Current Phase:** Version 2 — Phase 8I.1 complete (dashboard UX redesign)  
+**Overall Status:** Fully operational end to end. 605 BE (+50 subtests) + 319 FE tests pass. 0 TypeScript errors.
+
+---
+
+## 0. Version 2 Status (2026-07-03)
+
+The MVP below remains frozen and fully accurate. On top of it, Version 2
+has delivered a complete AI vision loop:
+
+| Phase | Deliverable | State |
+|---|---|---|
+| 8A/8B/8B.1 | AI workspace, YOLO training infrastructure, multi-model layout | Committed (`v2.0-phase-8c`) |
+| 8C | Dataset engineering — 12,545 imgs / 32,783 boxes, validated clean | Committed (`v2.0-phase-8c`) |
+| 8D | First trained model (yolov8n 5-epoch smoke test, val mAP50 0.509) + verified ONNX export | Committed (`v2.0-phase-8f`) |
+| 8E | `YOLODetector` (ONNX Runtime) registered beside `ground_truth`; config-driven switching | Committed (`v2.0-phase-8f`) |
+| 8F | Simulated drone camera — real photographs into `Frame.channels["rgb"]` per zone | Committed (`v2.0-phase-8f`) |
+| 8G | Live AI Vision — analysed image + detections inside `MissionState.vision` | **Uncommitted** |
+| 8H | Permanent image library `assets/simulation_dataset/` + export tool | **Uncommitted** |
+| 8I.1 | EOC dashboard redesign — `MissionCamera` (video-ready), detection cards, ops panel | **Uncommitted** |
+
+Data flow now: Simulation → CameraSimAdapter (zone → real image) →
+YOLODetector (ONNX) → DetectionResult → MissionState (incl. vision
+payload) → redesigned dashboard. The frontend still receives ONLY
+MissionState; REST/WebSocket contracts are unchanged; GroundTruthDetector
+remains the committed default detector.
+
+Full V2 detail, decisions, and next steps: `docs/session-context.md`
+(authoritative) and `docs/handoff-report.md` §0.
 
 ---
 

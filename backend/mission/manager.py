@@ -31,6 +31,7 @@ from backend.models.mission_state import (
     LatestReadings,
     MissionState,
     MissionStatus,
+    VisionFrame,
     ZoneState,
 )
 from backend.pipeline.pipeline import Pipeline
@@ -255,6 +256,12 @@ class MissionManager:
         denominator = self._total_zone_count if self._total_zone_count > 0 else len(existing_zones)
         explored_pct = (explored / max(denominator, 1)) * 100.0
 
+        # Phase 8G — lift the detector's vision payload (analysed image +
+        # detections) into the display contract. None whenever the active
+        # detector did not perform image inference on this frame.
+        vision_data = getattr(result, "metadata", {}).get("vision")
+        vision = VisionFrame(**vision_data) if vision_data else None
+
         self._mission_state = self._mission_state.model_copy(
             update={
                 "elapsed_seconds": elapsed,
@@ -265,6 +272,7 @@ class MissionManager:
                 "victim_signal_count": victim_signal_count,
                 "explored_percentage": round(explored_pct, 1),
                 "alert_count": len(current_alerts),
+                "vision": vision,
             }
         )
         self._notify()

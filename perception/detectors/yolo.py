@@ -28,7 +28,9 @@ installed.
 """
 from __future__ import annotations
 
+import base64
 import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -182,7 +184,9 @@ class YOLODetector(AbstractDetector):
             return self._unobserved(frame, zone_id, "frame has no 'rgb' channel")
 
         try:
+            started = time.perf_counter()
             detections = self._infer(image)
+            inference_ms = (time.perf_counter() - started) * 1000.0
         except Exception as exc:
             logger.error(
                 "YOLODetector | inference failed | frame=%s zone=%s: %s",
@@ -190,7 +194,11 @@ class YOLODetector(AbstractDetector):
             )
             return self._unobserved(frame, zone_id, f"inference failed: {exc}")
 
-        return self._to_detection_result(frame, zone_id, detections)
+        result = self._to_detection_result(frame, zone_id, detections)
+        vision = self._vision_payload(frame, zone_id, detections, image, inference_ms)
+        if vision is not None:
+            result.metadata["vision"] = vision
+        return result
 
     # ------------------------------------------------------------------
     # Inference pipeline
@@ -385,6 +393,64 @@ class YOLODetector(AbstractDetector):
                 "detections": len(detections),
             },
         )
+
+    def _vision_payload(
+        self,
+        frame: Frame,
+        zone_id: str,
+        detections: List[Dict[str, Any]],
+        image: Any,
+        inference_ms: float,
+    ) -> Optional[Dict[str, Any]]:
+        """Build the dashboard vision payload: the exact analysed image
+        (JPEG, base64) plus the raw detections and inference facts.
+
+        Rides in DetectionResult.metadata["vision"]; the MissionManager
+        lifts it into MissionState.vision so the frontend can show what
+        the AI saw without any second inference or disk access. Returns
+        None when the image cannot be encoded (vision display is
+        best-effort and must never affect detection results).
+        """
+        try:
+            array = self._as_image_array(image)
+            encoded = self._encode_jpeg(array)
+        except Exception as exc:
+            logger.warning("YOLODetector | vision encode failed: %s", exc)
+            return None
+        height, width = array.shape[:2]
+        return {
+            "frame_id": frame.frame_id,
+            "zone_id": zone_id,
+            "timestamp": datetime.now(timezone.utc),
+            "detector_name": self.detector_name,
+            "model_name": self._model_path.name,
+            "frame_number": int(frame.metadata.get("tick", 0)),
+            "image_base64": encoded,
+            "image_width": int(width),
+            "image_height": int(height),
+            "inference_ms": round(inference_ms, 1),
+            "confidence_threshold": self._confidence_threshold,
+            "detections": [
+                {
+                    "class_name": det["class_name"],
+                    "confidence": round(det["confidence"], 4),
+                    "bbox": [round(v, 1) for v in det["bbox_xyxy"]],
+                }
+                for det in detections
+            ],
+        }
+
+    @staticmethod
+    def _encode_jpeg(array: Any, quality: int = 80) -> str:
+        """Encode a BGR image array as base64 JPEG (lazy cv2)."""
+        import cv2
+
+        ok, buffer = cv2.imencode(
+            ".jpg", array, [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+        )
+        if not ok:
+            raise ValueError("cv2.imencode failed")
+        return base64.b64encode(buffer.tobytes()).decode("ascii")
 
     def _unobserved(self, frame: Frame, zone_id: str, reason: str) -> DetectionResult:
         """Best-effort result when no observation could be made."""

@@ -128,4 +128,5 @@ class PerceptionEngine:
             hazard_signals=detection.hazard_signals,
             detector_name=detection.detector_name,
             new_alerts=new_alerts,
+            metadata=detection.metadata,
         )

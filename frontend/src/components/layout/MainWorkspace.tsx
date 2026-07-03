@@ -1,13 +1,16 @@
 /**
- * MainWorkspace — left content area containing the tactical map and activity feed.
+ * MainWorkspace — the command center's primary content area (Phase 8I.1).
  *
- * Layout (top to bottom):
- *   - TacticalMap  (flex-1, fills remaining space)
- *   - ActivityFeed (compact, fixed height)
+ * Two columns:
+ *   Left  (camera column) — MissionCamera (the primary visual element,
+ *          sized for future video playback) over the DetectionCards row
+ *   Right (situation column) — TacticalMap over the ActivityFeed
  */
 
 import { useMissionStore } from '@/stores/missionStore';
 import { TacticalMap } from '@/components/dashboard/TacticalMap';
+import { MissionCamera } from '@/components/dashboard/MissionCamera';
+import { DetectionCards } from '@/components/dashboard/DetectionCards';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 
 export function MainWorkspace() {
@@ -15,28 +18,39 @@ export function MainWorkspace() {
   const wsStatus     = useMissionStore((s) => s.wsStatus);
 
   const isStale = wsStatus !== 'connected' && missionState !== null;
+  const vision = missionState?.vision ?? null;
 
   return (
     <main
       data-testid="main-workspace"
-      className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden p-2"
+      className="flex min-w-0 flex-1 gap-2 overflow-hidden p-2"
     >
-      {/* Tactical map — takes the majority of the space */}
-      <div className="min-h-0 flex-1">
-        <TacticalMap
-          zoneStates={missionState?.zone_states ?? {}}
-          droneState={missionState?.drone_state ?? null}
-          exploredPercentage={missionState?.explored_percentage ?? 0}
-          isStale={isStale}
-        />
+      {/* Camera column — the primary visual element */}
+      <div className="flex min-w-0 flex-[5] flex-col gap-2">
+        <div className="min-h-0 flex-1">
+          <MissionCamera vision={vision} />
+        </div>
+        <div className="h-[4.5rem] shrink-0">
+          <DetectionCards vision={vision} />
+        </div>
       </div>
 
-      {/* Activity feed — compact strip at the bottom */}
-      <div className="h-36 shrink-0">
-        <ActivityFeed
-          alerts={missionState?.active_alerts ?? []}
-          wsStatus={wsStatus}
-        />
+      {/* Situation column — building map + activity feed */}
+      <div className="flex min-w-0 flex-[4] flex-col gap-2">
+        <div className="min-h-0 flex-1">
+          <TacticalMap
+            zoneStates={missionState?.zone_states ?? {}}
+            droneState={missionState?.drone_state ?? null}
+            exploredPercentage={missionState?.explored_percentage ?? 0}
+            isStale={isStale}
+          />
+        </div>
+        <div className="h-32 shrink-0">
+          <ActivityFeed
+            alerts={missionState?.active_alerts ?? []}
+            wsStatus={wsStatus}
+          />
+        </div>
       </div>
     </main>
   );

@@ -76,9 +76,10 @@ export function MissionTimeline({ alerts, status }: MissionTimelineProps) {
       className="flex h-full items-center gap-0 overflow-hidden"
       aria-label="Mission timeline"
     >
-      {/* Label */}
+      {/* Label — the left block doubles as the anchor for future
+          replay/scrubbing controls; the strip itself stays a clean rail. */}
       <div className="flex shrink-0 flex-col items-center justify-center border-r border-border-subtle px-3">
-        <span className="font-mono text-2xs font-semibold text-text-muted">
+        <span className="font-mono text-2xs font-semibold tracking-widest text-text-muted">
           TIMELINE
         </span>
         <span className="mt-0.5 font-mono text-[0.55rem] text-text-dim">{status}</span>
@@ -108,8 +109,9 @@ export function MissionTimeline({ alerts, status }: MissionTimelineProps) {
                   backgroundColor: style.bg,
                   borderColor: style.border,
                   color: style.text,
+                  boxShadow: `inset 0 -2px 0 ${style.border}`,
                 }}
-                className="flex shrink-0 items-center gap-1.5 rounded border px-2.5 py-1"
+                className="flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 transition-transform hover:-translate-y-px"
               >
                 <span className="font-mono text-[0.6rem] font-bold opacity-90">
                   {LEVEL_ABBR[alert.level]}

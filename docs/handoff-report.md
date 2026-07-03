@@ -1,3 +1,46 @@
+# FireRescue AI — Handoff Report
+
+**Date:** 2026-07-03 (§0 — Version 2 session handoff) / 2026-07-01 (§1+ — MVP v1.0 handoff, preserved unchanged)  
+**Status:** Fully operational. All tests pass (605 BE + 50 subtests, 319 FE, tsc 0). Three verified phases pending a checkpoint commit.
+
+---
+
+## 0. Version 2 Session Handoff (2026-07-02 → 2026-07-03)
+
+### What this session delivered (chronological)
+
+1. **Phase 8C — Dataset engineering** → committed, tag `v2.0-phase-8c` (`09f9388`). data_tools pipeline (download/validate/merge/split/build/quality), sources registry, 12,545-image processed dataset validated clean, reports tracked in git. D-Fire remains a manual download (`ai/object_detection/docs/download_instructions.md`).
+2. **Phase 8D — First training** → yolov8n 5-epoch CPU smoke test (~4h15m; survived two runner interruptions via Ultralytics resume). Val mAP50 0.509 / mAP50-95 0.270. ONNX export verified (11.7 MB, opset 20) at `ai/object_detection/models/exports/firerescue-detector-20260703-003931-best.onnx`; full report in `ai/object_detection/models/reports/training_report.md`.
+3. **Phase 8E — Integration** → `perception/detectors/yolo.py` (`YOLODetector` on `AbstractDetector`, ONNX Runtime, letterbox → decode → conf filter → numpy NMS → class mapping; never raises, degrades to UNOBSERVED). Registered beside `ground_truth` in `backend/main.py`; switching via `settings.perception_detector` (default still `ground_truth`).
+4. **Phase 8F — Simulated camera** → `simulation/camera/` provider (+`simulation_camera.yaml`), `CameraSimAdapter` DataSource decorator sets `Frame.channels["rgb"]`, shared `make_data_source()` used by startup AND mission restart. 8D+8E+8F committed together, tag `v2.0-phase-8f` (`68fcc6f`, current HEAD).
+5. **Phase 8F verification run** → full app launched live; diagnosed and killed a stale pre-8F backend squatting port 8000; verified real end-to-end YOLO detections (victim 0.85; Loading Dock EMERGENCY).
+6. **Camera randomization analysis** → documented that missions repeat imagery by design (fresh provider + fixed seed 42 per mission). Recommended (not yet implemented): optional `seed: null` entropy mode with logged effective seed.
+7. **Phase 8G — Live AI Vision dashboard** *(uncommitted)* → detector packs the analysed JPEG + detections + timing into `DetectionResult.metadata`; engine passes it through; `MissionManager` lifts it into new optional `MissionState.vision`. Image rides inside MissionState → replay/history free, zero duplicate inference. Ground-truth mode shows a clean fallback.
+8. **Phase 8H — Permanent image library** *(uncommitted)* → `assets/simulation_dataset/` master library (categories × scene sub-folders, 50 seeded images, README with curation/licensing rules); `simulation/camera/images/` is now a generated runtime folder rebuilt by `export_simulation_library.py`. Regeneration proven content-exact; runtime folder byte-identical (zero behavior change).
+9. **Phase 8I.1 — Dashboard UX redesign** *(uncommitted, frontend-only)* → EOC layout. **Key design decision: `MissionCamera` is video-first** — a `CameraMediaSource` union (`image` | `video` | `stream`) renders through one `CameraMedia` switch, so future video/drone feeds require no UI redesign. Plus `DetectionCards`, `MissionOpsPanel`, enlarged glowing map, alert cards, polished timeline. All 295 original frontend tests pass unmodified; 8G's `AIVisionPanel` superseded/removed with all capabilities and tests ported.
+
+### Architectural decisions made this session
+
+- Vision imagery travels **inside MissionState** (base64 JPEG) rather than via a new endpoint — preserves the "frontend receives only MissionState" invariant and makes replay carry vision for free.
+- `MissionCamera` media-source abstraction (video-ready by design, images-only today).
+- Master image library (`assets/`) is the permanent source; the simulator's folder is generated. `assets/` intentionally NOT gitignored — user decides whether to track its images at commit time.
+- Live demos override `perception_detector` to `"yolo"` in-process via an external launcher; committed default stays `ground_truth` for backward compatibility.
+- Frozen-MVP seam edits stayed minimal and additive throughout (settings/main/routes/models/manager/engine — all user-authorized, all documented in `docs/session-context.md`).
+
+### Verification status at handoff
+
+- Backend 605 tests + 50 subtests · Frontend 319 tests · TypeScript 0 errors — all green against the final tree.
+- Live run verified this session: real YOLO detections on the redesigned dashboard (screenshots in `C:\Users\Administrator\Desktop\firerescue-8g-screenshots\`).
+- Dev services (backend with YOLO launcher + Vite) were left running for manual review; they are disposable — nothing is lost by stopping them or rebooting.
+
+### Pending work (next session, in recommended order)
+
+1. **Checkpoint commit** of 8G/8H/8I.1 (suggested tag `v2.0-phase-8i1`) — three verified phases currently exist only in the working tree.
+2. CUDA torch install (RTX 3060 Ti idle) + manual D-Fire download + dataset pipeline re-run + the full 50-epoch training; then threshold calibration and possibly flipping the default detector to `yolo`.
+3. Optional: camera `seed: null` entropy mode; 8I.2 UX follow-ups (responsiveness < 1400 px, box-label edge overflow, replay scrubbing); pushing checkpoints to GitHub.
+
+---
+
 # FireRescue AI — MVP v1.0 Handoff Report
 
 **Version:** 1.0.0  

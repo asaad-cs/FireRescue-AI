@@ -78,6 +78,38 @@ class LatestReadings(BaseModel):
     smoke_density: Optional[float] = None  # 0.0 – 1.0 normalized
 
 
+class VisionDetection(BaseModel):
+    """One object the vision detector found in the analysed image."""
+
+    class_name: str                       # "fire" | "smoke" | "person"
+    confidence: float                     # 0.0 – 1.0
+    bbox: List[float] = Field(default_factory=list)  # [x1, y1, x2, y2] px
+
+
+class VisionFrame(BaseModel):
+    """What the AI vision detector saw and decided for the latest frame.
+
+    Present only when the active detector performed image inference
+    (Phase 8G); None under GroundTruthDetector or when a frame carried
+    no camera image. The image is the exact JPEG-encoded input the
+    detector analysed — the frontend never re-runs inference or loads
+    images from disk.
+    """
+
+    frame_id: str
+    zone_id: str
+    timestamp: Optional[datetime] = None
+    detector_name: str = ""
+    model_name: str = ""
+    frame_number: int = 0                 # simulation tick
+    image_base64: str = ""                # JPEG, base64-encoded
+    image_width: int = 0
+    image_height: int = 0
+    inference_ms: float = 0.0
+    confidence_threshold: float = 0.0
+    detections: List[VisionDetection] = Field(default_factory=list)
+
+
 class MissionState(BaseModel):
     """
     Complete mission snapshot pushed to the dashboard on every Frame cycle.
@@ -100,3 +132,5 @@ class MissionState(BaseModel):
     victim_signal_count: int = 0
     explored_percentage: float = 0.0
     connection_status: ConnectionStatus = ConnectionStatus.DISCONNECTED
+    # Phase 8G — live AI vision (None when no image inference happened)
+    vision: Optional[VisionFrame] = None

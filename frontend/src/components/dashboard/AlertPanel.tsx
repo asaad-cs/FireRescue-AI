@@ -98,8 +98,11 @@ function AlertItem({ alert, isAcknowledged, onAcknowledge }: AlertItemProps) {
         backgroundColor: isAcknowledged ? '#0a0f18' : style.bg,
         borderColor: isAcknowledged ? '#1a2435' : style.border,
         opacity: isAcknowledged && alert.level !== AlertLevel.EMERGENCY ? 0.55 : 1,
+        boxShadow: isAcknowledged
+          ? 'inset 3px 0 0 #1a2435'
+          : `inset 3px 0 0 ${style.badge}, 0 1px 4px #00000066`,
       }}
-      className={`flex flex-col gap-1 rounded border p-2${
+      className={`flex flex-col gap-1 rounded-md border p-2.5 transition-opacity duration-300${
         alert.level === AlertLevel.EMERGENCY && !isAcknowledged
           ? ' animate-emergency-pulse'
           : ''

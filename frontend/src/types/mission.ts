@@ -84,6 +84,35 @@ export interface Alert {
   triggered_at: string; // ISO 8601 datetime
 }
 
+// ─── AI vision (Phase 8G) ─────────────────────────────────────────────────────
+
+/** One object the vision detector found in the analysed image. */
+export interface VisionDetection {
+  class_name: string; // "fire" | "smoke" | "person"
+  confidence: number; // 0.0 – 1.0
+  bbox: number[];     // [x1, y1, x2, y2] in original image pixels
+}
+
+/**
+ * What the AI vision detector saw and decided for the latest frame.
+ * Null when the active detector performs no image inference
+ * (GroundTruthDetector) or the frame carried no camera image.
+ */
+export interface VisionFrame {
+  frame_id: string;
+  zone_id: string;
+  timestamp: string | null; // ISO 8601 datetime
+  detector_name: string;
+  model_name: string;
+  frame_number: number;     // simulation tick
+  image_base64: string;     // JPEG, base64-encoded
+  image_width: number;
+  image_height: number;
+  inference_ms: number;
+  confidence_threshold: number;
+  detections: VisionDetection[];
+}
+
 // ─── Root model ───────────────────────────────────────────────────────────────
 
 export interface MissionState {
@@ -100,6 +129,7 @@ export interface MissionState {
   victim_signal_count: number;
   explored_percentage: number;
   connection_status: ConnectionStatus;
+  vision?: VisionFrame | null; // Phase 8G — absent/null without image inference
 }
 
 // ─── Guards ───────────────────────────────────────────────────────────────────

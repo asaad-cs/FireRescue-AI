@@ -70,7 +70,11 @@ ai/
 │   │   ├── split.py            Deterministic stratified splits
 │   │   ├── build.py            Final YOLO assembly + data.yaml
 │   │   ├── quality.py          Statistics + quality report
-│   │   └── pipeline.py         merge -> split -> build -> validate
+│   │   ├── pipeline.py         merge -> split -> build -> validate
+│   │   ├── export_sim_images.py           Seed camera images from the dataset
+│   │   └── export_simulation_library.py   Master library -> runtime camera folder
+│   │                           (master library: assets/simulation_dataset/,
+│   │                            see its README for curation + regeneration)
 │   ├── models/
 │   │   ├── checkpoints/        One directory per training run
 │   │   ├── exports/            Final serialized models ready for integration

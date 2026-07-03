@@ -1,10 +1,12 @@
 /**
- * RightSidebar — operational panels stacked vertically.
+ * RightSidebar — operational panels stacked vertically (Phase 8I.1).
  *
- * Top to bottom (proportional flex sizing):
- *   AlertPanel    (flex-[3]) — highest priority, most space
- *   DroneStatus   (flex-[2])
- *   VictimSignals (flex-[2])
+ * Top to bottom:
+ *   MissionStatistics (compact summary row)
+ *   MissionOpsPanel   (mission + AI operations summary)
+ *   AlertPanel        (flex-[3] — highest priority, most space)
+ *   DroneStatus       (flex-[2])
+ *   VictimSignals     (flex-[2])
  */
 
 import { useMissionStore } from '@/stores/missionStore';
@@ -12,6 +14,7 @@ import { AlertPanel }        from '@/components/dashboard/AlertPanel';
 import { DroneStatus }       from '@/components/dashboard/DroneStatus';
 import { VictimSignals }     from '@/components/dashboard/VictimSignals';
 import { MissionStatistics } from '@/components/dashboard/MissionStatistics';
+import { MissionOpsPanel }   from '@/components/dashboard/MissionOpsPanel';
 import { MissionStatus } from '@/types/mission';
 
 export function RightSidebar() {
@@ -41,13 +44,18 @@ export function RightSidebar() {
   return (
     <aside
       data-testid="right-sidebar"
-      className="flex w-88 shrink-0 flex-col gap-2 overflow-y-auto border-l border-border-default bg-bg-base p-2"
+      className="flex w-96 shrink-0 flex-col gap-2 overflow-y-auto border-l border-border-default bg-bg-base p-2"
     >
       {/* Mission stats — compact summary row at top */}
       <MissionStatistics missionState={missionState} />
 
+      {/* Operations summary — mission + AI status (Phase 8I.1) */}
+      <div className="shrink-0">
+        <MissionOpsPanel missionState={missionState} />
+      </div>
+
       {/* Alert panel — most vertical space, highest priority */}
-      <div className="flex-[3] overflow-hidden">
+      <div className="min-h-[10rem] flex-[3] overflow-hidden">
         <AlertPanel
           alerts={alerts}
           alertCount={alertCount}
@@ -57,7 +65,7 @@ export function RightSidebar() {
       </div>
 
       {/* Drone status */}
-      <div className="flex-[2] overflow-hidden">
+      <div className="min-h-[8rem] flex-[2] overflow-hidden">
         <DroneStatus
           droneState={droneState}
           latestReadings={latestReadings}
@@ -67,7 +75,7 @@ export function RightSidebar() {
       </div>
 
       {/* Victim signals */}
-      <div className="flex-[2] overflow-hidden">
+      <div className="min-h-[6rem] flex-[2] overflow-hidden">
         <VictimSignals
           zoneStates={zoneStates}
           victimSignalCount={victimSignalCount}

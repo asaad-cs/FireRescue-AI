@@ -62,21 +62,31 @@ function ZoneCell({ col, row, zone, hasDrone }: ZoneCellProps) {
   const hasVictim = (zone?.victim_probability ?? 0) >= 0.3;
   const highVictim = (zone?.victim_probability ?? 0) >= 0.6;
 
+  const severe =
+    hazard === HazardLevel.HIGH || hazard === HazardLevel.CRITICAL;
+
   return (
     <div
       data-testid={`zone-cell-${col}-${row}`}
       aria-label={`Zone ${label} — ${hazard}${hasDrone ? ', drone here' : ''}${hasVictim ? ', victim signal' : ''}`}
       style={{
         backgroundColor: style.bg,
-        borderColor: style.border,
+        borderColor: hasDrone ? '#38bdf8' : style.border,
         color: style.text,
         outline: hasDrone ? '2px solid #38bdf8' : undefined,
         outlineOffset: hasDrone ? '-2px' : undefined,
+        boxShadow: hasDrone
+          ? '0 0 14px #38bdf855, inset 0 0 18px #38bdf81a'
+          : severe
+            ? `inset 0 0 16px ${style.text}22`
+            : undefined,
       }}
-      className="relative flex min-h-[4rem] flex-col items-center justify-center rounded border p-1 text-center"
+      className="relative flex min-h-[4rem] flex-col items-center justify-center rounded-md border p-1 text-center transition-all duration-300"
     >
       {/* Zone label */}
-      <span className="font-mono text-xs font-bold leading-none">{label}</span>
+      <span className="font-mono text-xs font-bold leading-none tracking-wide">
+        {label}
+      </span>
 
       {/* Hazard abbreviation */}
       {hazard !== HazardLevel.UNOBSERVED && (
@@ -212,8 +222,21 @@ export function TacticalMap({
         </div>
       </div>
 
+      {/* Explored progress track */}
+      <div className="h-0.5 w-full shrink-0" style={{ backgroundColor: '#0d1520' }}>
+        <div
+          aria-hidden="true"
+          className="h-full transition-all duration-700"
+          style={{
+            width: `${Math.min(exploredPercentage, 100)}%`,
+            backgroundColor: '#22c55e',
+            boxShadow: '0 0 6px #22c55e88',
+          }}
+        />
+      </div>
+
       {/* Grid */}
-      <div className="min-h-0 flex-1 p-2">
+      <div className="min-h-0 flex-1 p-2.5">
         <div className="flex h-full gap-1">
           {/* Row number labels (1–4) on the left */}
           <div
