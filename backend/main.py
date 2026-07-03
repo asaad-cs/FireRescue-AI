@@ -22,13 +22,14 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from backend.api.routes import router
 from backend.config.settings import settings
-from backend.ingestion.sim_adapter import SimAdapter
+from backend.ingestion.camera_adapter import make_data_source
 from backend.mission.manager import MissionManager
 from backend.mission.recorder import MissionRecorder
 from backend.pipeline.enricher import Enricher
@@ -37,6 +38,7 @@ from backend.pipeline.validator import Validator
 from backend.websocket.broadcaster import Broadcaster
 from backend.utils.logger import logger
 from perception.detectors.ground_truth import GroundTruthDetector
+from perception.detectors.yolo import YOLODetector, find_latest_model
 from perception.engine import PerceptionEngine
 from perception.registry.registry import DetectorRegistry
 from simulation.runner import SimulationRunner
@@ -65,6 +67,23 @@ async def lifespan(app: FastAPI):
 
     registry = DetectorRegistry()
     registry.register("ground_truth", gt_detector)
+
+    # YOLO detector (Version 2). Always registered so switching is a
+    # config-only change; degrades gracefully if no model is exported.
+    project_root = Path(__file__).resolve().parents[1]
+    yolo_model = (
+        project_root / settings.yolo_model_path
+        if settings.yolo_model_path
+        else find_latest_model(project_root / settings.yolo_model_dir)
+    )
+    yolo_detector = YOLODetector(
+        model_path=yolo_model or (project_root / settings.yolo_model_dir / "model.onnx"),
+        confidence_threshold=settings.yolo_confidence_threshold,
+        iou_threshold=settings.yolo_iou_threshold,
+        image_size=settings.yolo_image_size,
+    )
+    yolo_detector.initialize()
+    registry.register("yolo", yolo_detector)
 
     logger.info(
         "Detector registry ready | active='%s' | available=%s",
@@ -107,8 +126,10 @@ async def lifespan(app: FastAPI):
             mission_id,
         )
 
-    # ── Wire SimAdapter and launch tick loop ─────────────────────────── #
-    adapter = SimAdapter(runner=runner, on_complete=on_mission_complete)
+    # ── Wire data source (SimAdapter + simulated camera) and launch ──── #
+    adapter = make_data_source(
+        runner=runner, scenario=scenario, on_complete=on_mission_complete
+    )
     sim_task = asyncio.create_task(
         adapter.start(mission_id=mission_id, on_frame_callback=manager.on_frame)
     )
@@ -140,6 +161,7 @@ async def lifespan(app: FastAPI):
     except (asyncio.CancelledError, Exception):
         pass
     gt_detector.shutdown()
+    yolo_detector.shutdown()
     logger.info("FireRescue AI backend stopped.")
 
 

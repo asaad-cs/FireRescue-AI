@@ -252,19 +252,26 @@ recommendations).
    YAML machinery, run naming. Do not duplicate utilities.
 3. Keep the module self-contained; modules never import each other.
 
-## Future Integration with FireRescue AI
+## Integration with FireRescue AI (Phase 8E — implemented)
 
-The MVP was built for exactly this hand-off, and integration will not
-require modifying any frozen module:
+The hand-off the MVP was designed for is now in place:
 
-- The perception framework selects detectors by name through
-  `DetectorRegistry` (`perception/registry/registry.py`).
-- A future learned detector implements the existing `BaseDetector`
-  interface (`perception/base/detector.py`), loads an exported model
-  from `ai/object_detection/models/exports/`, and registers itself
-  alongside `ground_truth`.
-- Switching the backend to the learned detector is then a single
-  config value (`perception_detector` in `backend/config/settings.py`).
-
-Until that detector exists, this workspace has zero effect on the
-running system.
+- `perception/detectors/yolo.py` implements `YOLODetector` on the
+  existing `AbstractDetector` interface. It loads the newest ONNX
+  export from `ai/object_detection/models/exports/` with ONNX Runtime
+  and runs the full inference pipeline (letterbox preprocessing,
+  decoding, confidence filtering, class-aware NMS, class mapping to
+  `DetectionResult`).
+- `backend/main.py` registers it in `DetectorRegistry` alongside
+  `ground_truth` at startup. Registration always succeeds: with no
+  exported model (or no onnxruntime installed) the detector degrades
+  gracefully and reports zones as UNOBSERVED.
+- The active detector is chosen by `perception_detector` in
+  `backend/config/settings.py` (`"ground_truth"` — still the default —
+  or `"yolo"`); thresholds and the model location are the
+  `yolo_*` settings. No REST, WebSocket, or frontend contract changed.
+- The detector reads images from `frame.channels["rgb"]` (numpy BGR
+  array or image path) — the channel the Frame model reserved for
+  this. The simulation does not emit that channel yet, so with `yolo`
+  active the system runs and reports UNOBSERVED until a future phase
+  supplies imagery.

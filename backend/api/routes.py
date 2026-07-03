@@ -172,7 +172,7 @@ async def start_mission(request: Request) -> MissionActionResponse:
         # Previous mission completed — spin up a fresh simulation.
         # Picks the scenario that was last activated via POST /scenarios/{key}/activate.
         from simulation.runner import SimulationRunner
-        from backend.ingestion.sim_adapter import SimAdapter
+        from backend.ingestion.camera_adapter import make_data_source
         from perception.detectors.ground_truth import GroundTruthDetector
 
         scenario_key = getattr(
@@ -208,7 +208,9 @@ async def start_mission(request: Request) -> MissionActionResponse:
         def on_complete() -> None:
             manager.end_mission()
 
-        adapter = SimAdapter(runner=runner, on_complete=on_complete)
+        adapter = make_data_source(
+            runner=runner, scenario=scenario, on_complete=on_complete
+        )
         request.app.state.adapter = adapter
         asyncio.create_task(
             adapter.start(mission_id=mission_id, on_frame_callback=manager.on_frame)

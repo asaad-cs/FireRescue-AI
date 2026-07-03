@@ -32,8 +32,26 @@ class Settings:
     sim_tick_interval_seconds: float = 1.0   # seconds between simulation ticks
     sim_drone_id: str = "sim-drone-alpha"
 
-    # Perception — name must match a detector registered at startup
+    # Perception — name must match a detector registered at startup.
+    # Available: "ground_truth" (simulation ground truth, MVP default)
+    #            "yolo"         (ONNX model trained in ai/, Version 2)
     perception_detector: str = "ground_truth"
+
+    # YOLO detector (used only when perception_detector == "yolo", but
+    # the detector is always registered so switching is config-only).
+    # yolo_model_path: explicit .onnx file; empty string → newest .onnx
+    # in yolo_model_dir. Relative paths resolve from the project root.
+    yolo_model_path: str = ""
+    yolo_model_dir: str = "ai/object_detection/models/exports"
+    yolo_confidence_threshold: float = 0.25
+    yolo_iou_threshold: float = 0.45
+    yolo_image_size: int = 640
+
+    # Simulated drone camera (Phase 8F): attaches an RGB image to every
+    # frame via Frame.channels["rgb"]. Disabling it (or any camera
+    # configuration problem) falls back to the plain simulation frames.
+    camera_enabled: bool = True
+    camera_config_path: str = "simulation/camera/simulation_camera.yaml"
 
     # Future placeholders (not used in Phase 3)
     database_url: str = "sqlite:///./firerescue.db"

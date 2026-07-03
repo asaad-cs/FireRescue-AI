@@ -1,0 +1,55 @@
+# Simulated drone camera configuration (Phase 8F).
+#
+# Maps simulation zones to folders of real photographs so detectors
+# can run actual inference. Loaded by backend/ingestion/camera_adapter
+# at startup and on every mission restart; the file location itself is
+# configurable (settings.camera_config_path).
+
+# Directory holding one sub-folder per category. A relative path is
+# resolved against the project root. Populate it with:
+#   python -m ai.object_detection.data_tools.export_sim_images
+image_root: simulation/camera/images
+
+# Accepted image file extensions.
+extensions: [".jpg", ".jpeg", ".png"]
+
+# Image selection: with randomize true, each zone visit draws a random
+# image from its category using 'seed' (deterministic across runs for
+# the same seed and visit order). With randomize false, the first
+# image (sorted by name) is always used.
+randomize: true
+seed: 42
+
+# Decoded-image LRU cache (number of images kept in memory).
+cache_size: 64
+
+# Category used when a zone matches nothing else.
+default_category: safe
+
+# Scenario ground-truth hazard level → image category. Zones absent
+# from the scenario's hazard map use default_category.
+hazard_categories:
+  CLEAR: safe
+  LOW: smoke
+  MODERATE: smoke
+  HIGH: fire_smoke
+  CRITICAL: fire
+
+# Zones containing a victim: append this suffix to the hazard category
+# ("fire" -> "fire_person"); in an otherwise safe zone the category
+# becomes victim_only_category. Missing combination folders fall back
+# automatically (fire_person -> fire -> ... -> default_category).
+victim_suffix: _person
+victim_only_category: person
+
+# Explicit per-zone overrides (zone_id -> category). Highest priority.
+# Example:
+#   zone_overrides:
+#     "4_3_1": fire_smoke
+zone_overrides: {}
+
+# Future video source — PLACEHOLDER ONLY. Not implemented; the config
+# loader rejects enabled: true by design (no video, streaming, webcam,
+# or RTSP in this phase).
+video:
+  enabled: false

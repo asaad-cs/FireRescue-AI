@@ -1,6 +1,6 @@
 # FireRescue AI — Future Session Context
 
-> Paste this document at the start of any new AI session to provide complete project context without reading the repository. Last updated: 2026-07-03, end of Phase 8C (dataset engineering).
+> Paste this document at the start of any new AI session to provide complete project context without reading the repository. Last updated: 2026-07-03, end of Phase 8F (simulated camera integration).
 
 ---
 
@@ -27,13 +27,13 @@ A virtual drone explores a simulated building using breadth-first search, sensor
 | Git identity | `asaad-cs <ahmed.s.alfaidi@gmail.com>` (global config; fixed 2026-07-02 — the initial commit was amended from a placeholder identity and force-pushed with lease; the tag was moved to match) |
 | License | MIT |
 
-**Version 2 checkpoint:** all V2 work (Phases 8A/8B/8B.1/8C — the `ai/` workspace, `.gitignore` updates, and this document) is committed locally as the annotated tag `v2.0-phase-8c` on `main`, directly after `c5edef9`. It has NOT been pushed to GitHub; pushing is pending a user decision. Generated data (raw downloads, merged/, processed/, checkpoints) is gitignored — only code, configs, docs, tests, and the dataset reports are tracked.
+**Version 2 checkpoints:** annotated tags `v2.0-phase-8c` (dataset engineering) and `v2.0-phase-8f` (training + YOLO integration + simulated camera) exist locally on `main` after `c5edef9`. NOTHING has been pushed to GitHub; pushing is pending a user decision. Generated data (raw downloads, merged/, processed/, checkpoints, exports, simulation/camera/images/) is gitignored — only code, configs, docs, tests, and reports are tracked.
 
 ---
 
 ## MVP v1.0.0 — Frozen
 
-The MVP is complete, frozen, and byte-for-byte unchanged since release. All 286 MVP backend tests, 295 frontend tests, and `tsc --noEmit` (0 errors) pass. Never modify: `backend/`, `frontend/`, `simulation/`, `perception/`, or any MVP test.
+The MVP is complete and frozen. All 286 MVP backend tests, 295 frontend tests, and `tsc --noEmit` (0 errors) pass unchanged. Never modify frozen MVP logic. The ONLY exceptions ever made (Phases 8E/8F, via the officially documented integration seams) are: additive config fields in `backend/config/settings.py`, the detector registration block in `backend/main.py`, a two-line adapter-construction swap in `backend/main.py` + `backend/api/routes.py`, and NEW additive files (`perception/detectors/yolo.py`, `simulation/camera/`, `backend/ingestion/camera_adapter.py`, new test files). No existing MVP behavior changed; frontend, REST, and WebSocket contracts are untouched.
 
 ### Architecture (unchanged)
 
@@ -134,6 +134,15 @@ Built the full dataset pipeline in `ai/object_detection/data_tools/` (download, 
 - **Unified classes:** 0 fire · 1 smoke · 2 person. Reproduce with `python -m ai.object_detection.data_tools.download` then `...data_tools.pipeline` (seed 42, stratified 70/20/10).
 - **Result:** datasets/processed/ holds 12,545 images / 32,783 boxes (fire 12,043, smoke 9,963, person 10,777), split 8,781/2,509/1,255, validated CLEAN (0 errors; 1,169 byte-identical duplicates removed at merge). Reports in `datasets/reports/` (dataset_report.json/md, merge/split/quality_report.md — tracked in git). Raw/merged/processed data itself is gitignored; the pipeline skips missing sources and absorbs D-Fire automatically once it lands in `raw/dfire/`.
 
+### Phase 8D — First training run (complete, 2026-07-03, smoke test)
+Trained yolov8n for 5 epochs (in-memory override of the committed 50; configs untouched) on CPU (~4h15m — torch is CPU-only; the machine's RTX 3060 Ti is unused until a CUDA torch build is installed). Run `firerescue-detector-20260703-003931` under `models/checkpoints/` (gitignored): best.pt/last.pt, results.csv, TensorBoard logs, curves, evaluation/ artifacts. **Val metrics (standard protocol): P 0.621 / R 0.458 / mAP50 0.509 / mAP50-95 0.270** — still climbing at epoch 5, far from converged. ONNX export verified (11.7 MB, opset 20, `images [1,3,640,640]` → `[1,7,8400]`) and copied to `models/exports/`. Full report: `ai/object_detection/models/reports/training_report.md` (tracked).
+
+### Phase 8E — YOLO integration (complete, 2026-07-03)
+`perception/detectors/yolo.py`: `YOLODetector(AbstractDetector)` runs the exported ONNX via onnxruntime — letterbox preprocess, decode, confidence filter, class-aware numpy NMS, mapping to DetectionResult (fire→HazardSignal HIGH/CRITICAL, smoke→LOW/MODERATE, person→VictimSignal "unknown"). Registered in `backend/main.py` alongside `ground_truth`; selection via `settings.perception_detector` (**default is still "ground_truth"**); `yolo_*` settings hold thresholds + model location (newest export auto-discovered). Never raises: missing model/runtime/rgb-channel → graceful UNOBSERVED. 40 tests (mocked ORT + real-model integration test).
+
+### Phase 8F — Simulated camera (complete, 2026-07-03)
+`simulation/camera/` (provider.py + simulation_camera.yaml): zones map to folders of real photographs by scenario hazard level + victim presence (+ per-zone overrides), with seeded deterministic random selection, LRU cache, and fallback chain. `backend/ingestion/camera_adapter.py`: `CameraSimAdapter` DataSource-decorator attaches `frame.channels["rgb"]`; `make_data_source()` used by main.py AND the routes.py restart path. Controlled by `settings.camera_enabled` / `camera_config_path`; any problem degrades to plain SimAdapter. Populate the (gitignored) image library with `python -m ai.object_detection.data_tools.export_sim_images`. Live-verified: with `perception_detector="yolo"` the model detected the warehouse victim at 0.85 from an actual image. 34 tests.
+
 ---
 
 ## Long-Term Multi-Model AI Architecture
@@ -194,11 +203,12 @@ ai/
 ## Current Test Counts (verified 2026-07-02)
 
 ```
-Backend:    504 tests + 50 subtests   (python -m pytest)   = 286 MVP + 218 AI
+Backend:    578 tests + 50 subtests   (python -m pytest)
+            = 286 MVP + 218 AI + 40 YOLO integration + 34 camera
 Frontend:   295 tests                  (npx vitest run)
 TypeScript: 0 errors                   (npx tsc --noEmit)
 ```
-(verified 2026-07-03, end of Phase 8C)
+(verified 2026-07-03, end of Phase 8F)
 
 ---
 
@@ -232,11 +242,13 @@ MVP (unchanged from v1.0.0):
 8. Client-side replay history lost on page reload
 
 Version 2 (current):
-9. D-Fire is not merged yet — its download is manual (login required); the dataset currently has only 2 negative samples until D-Fire's 9,838 negatives arrive
+9. D-Fire is not merged yet — its download is manual (login required); the dataset has only 2 negative samples (and the camera's `safe/` category only those 2 images) until D-Fire's 9,838 negatives arrive
 10. Person images come from COCO val2017 only (≈2,700); fire+person co-occurrence is under-represented (scale-up path documented in download_instructions.md)
-11. No learned detector is integrated into the backend (by design, until trained + evaluated)
-12. V2 work is committed locally (tag v2.0-phase-8c) but not pushed
-13. Torch is CPU-only on this machine — Phase 8D training will be slow without a CUDA build
+11. The deployed model is the 5-epoch smoke-test baseline (val mAP50 0.509) — noticeable false positives (LOW smoke suspicions, ~0.27 spurious victim confidence in safe zones); the 50-epoch run is pending
+12. Torch is CPU-only — training is ~51 min/epoch until a CUDA build is installed (RTX 3060 Ti present); ONNX inference also runs on CPU (~0.3 s/frame, fine at 1 s ticks)
+13. `perception_detector` default remains "ground_truth"; "yolo" is opt-in until the real model lands
+14. The dashboard does not display camera images or bounding boxes (frontend deliberately untouched)
+15. V2 work is committed locally (tags v2.0-phase-8c, v2.0-phase-8f) but not pushed
 
 ---
 
@@ -248,7 +260,10 @@ Version 2 (current):
 | 8B | YOLO training infrastructure | Complete |
 | 8B.1 | Multi-model architecture refactor | Complete |
 | 8C | Dataset engineering (data_tools pipeline, sources, validation, reports) | Complete |
-| **8D** | **Train first detector → evaluate → export ONNX → integrate via DetectorRegistry** | **NEXT — do not start without user instruction** |
+| 8D | First training run (5-epoch smoke test, mAP50 0.509) + verified ONNX export | Complete |
+| 8E | YOLODetector integration via DetectorRegistry (config-driven switching) | Complete |
+| 8F | Simulated drone camera (real images → Frame.channels["rgb"]) | Complete |
+| **8G** | **To be defined by the user — do not start without instruction** | **NEXT** |
 | — | Fire detection, SLAM/mapping, sensor fusion modules | Future |
 
 Integration path (unchanged, requires zero frozen-module edits): a learned detector implements `BaseDetector` (`perception/base/detector.py`), loads an exported model from `ai/object_detection/models/exports/`, registers in `DetectorRegistry` alongside `ground_truth`, and is activated via `perception_detector` in `backend/config/settings.py`.
@@ -259,11 +274,14 @@ Integration path (unchanged, requires zero frozen-module edits): a learned detec
 
 ## THE EXACT NEXT TASK
 
-> **Note:** Phases 8A, 8B, 8B.1, and 8C are all complete and committed at tag `v2.0-phase-8c` (2026-07-03). Do NOT redo them. The processed dataset exists and validates clean; `train.py`'s fail-fast dataset checks now pass.
+> **Note:** Phases 8A through 8F are all complete and committed (tags `v2.0-phase-8c`, `v2.0-phase-8f`, 2026-07-03). Do NOT redo them. The system runs end-to-end: simulated camera → YOLO ONNX inference → MissionState → dashboard.
 
-The next task is **Phase 8D — first training run**: train the YOLO detector on `datasets/processed/` (`python -m ai.object_detection.training.train`), evaluate it, and export per `model.yaml`. Wait for the user to define scope before starting. Be aware torch is CPU-only here — discuss expectations (or a smaller epoch count / CUDA install) with the user before launching a 50-epoch run.
+**Phase 8G is not yet defined — wait for the user.** The highest-value candidates, in recommended order:
+1. Install a CUDA torch build (an RTX 3060 Ti 8 GB sits idle; ~51 min/epoch → ~1–2 min) and run the full 50-epoch training on the committed config, ideally after manually downloading D-Fire (docs/download_instructions.md; +21.5k images incl. 9.8k negatives — biggest gain for smoke recall and false-positive suppression).
+2. Threshold calibration from the PR/F1 curves, then consider flipping `perception_detector` default to "yolo".
+3. Dashboard camera/detection view (frontend work — has been deliberately out of scope so far).
 
-Also pending user decisions: pushing the `v2.0-phase-8c` commit+tag to GitHub, and manually downloading D-Fire (docs/download_instructions.md) to enrich the dataset before or after 8D.
+Also pending user decisions: pushing the checkpoints to GitHub.
 
 ---
 
