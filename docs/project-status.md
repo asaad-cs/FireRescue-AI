@@ -1,13 +1,13 @@
 # FireRescue AI — Project Status
 
 **Version:** 1.0.0 (MVP, frozen) + Version 2 in progress  
-**Date:** 2026-07-03 (MVP sections below reflect 2026-07-01)  
-**Current Phase:** Version 2 — Phase 8I.1 complete (dashboard UX redesign)  
-**Overall Status:** Fully operational end to end. 605 BE (+50 subtests) + 319 FE tests pass. 0 TypeScript errors.
+**Date:** 2026-07-04 (MVP sections below reflect 2026-07-01)  
+**Current Phase:** Version 2 — Phase 8J complete (scene-aware dataset split)  
+**Overall Status:** Fully operational end to end. 609 BE (+50 subtests) + 319 FE tests pass. 0 TypeScript errors.
 
 ---
 
-## 0. Version 2 Status (2026-07-03)
+## 0. Version 2 Status (2026-07-04)
 
 The MVP below remains frozen and fully accurate. On top of it, Version 2
 has delivered a complete AI vision loop:
@@ -22,6 +22,7 @@ has delivered a complete AI vision loop:
 | 8G | Live AI Vision — analysed image + detections inside `MissionState.vision` | Committed (`v2.0-phase-8i1`) |
 | 8H | Permanent image library `assets/simulation_dataset/` + export tool | Committed (`v2.0-phase-8i1`) |
 | 8I.1 | EOC dashboard redesign — `MissionCamera` (video-ready), detection cards, ops panel | Committed (`v2.0-phase-8i1`) |
+| 8J | Scene-aware dataset split — Roboflow-variant leakage fixed, dataset regenerated (8,783/2,515/1,247), 0-leakage verified, residual dHash overlap halved (16.9→8.0% val, 15.6→6.2% test) | Committed (`v2.0-phase-8j`) |
 
 Data flow now: Simulation → CameraSimAdapter (zone → real image) →
 YOLODetector (ONNX) → DetectionResult → MissionState (incl. vision

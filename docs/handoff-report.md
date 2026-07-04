@@ -1,7 +1,7 @@
 # FireRescue AI — Handoff Report
 
-**Date:** 2026-07-03 (§0 — Version 2 session handoff) / 2026-07-01 (§1+ — MVP v1.0 handoff, preserved unchanged)  
-**Status:** Fully operational. All tests pass (605 BE + 50 subtests, 319 FE, tsc 0). All phases through 8I.1 committed (`v2.0-phase-8i1`, local only).
+**Date:** 2026-07-04 (§0 — Version 2 session handoff) / 2026-07-01 (§1+ — MVP v1.0 handoff, preserved unchanged)  
+**Status:** Fully operational. All tests pass (609 BE + 50 subtests, 319 FE, tsc 0). All phases through 8J committed (`v2.0-phase-8j`, local only).
 
 ---
 
@@ -33,12 +33,29 @@
 - Live run verified this session: real YOLO detections on the redesigned dashboard (screenshots in `C:\Users\Administrator\Desktop\firerescue-8g-screenshots\`).
 - Dev services (backend with YOLO launcher + Vite) were left running for manual review; they are disposable — nothing is lost by stopping them or rebooting.
 
+### Phase 8J — Scene-aware dataset split (2026-07-04, tag `v2.0-phase-8j`)
+
+Fixed the dataset audit's finding 1 (near-duplicate split leakage).
+`data_tools/split.py` now assigns whole scenes (Roboflow `.rf.<32-hex>`
+suffix stripped from the file stem) stratified by dominant class
+signature; `splits.json` records `method: "scene"`. Dataset regenerated
+via the full pipeline (seed 42): 8,783/2,515/1,247 (70.0/20.0/9.9%),
+validator CLEAN. Independently verified: 0 scene leakage across 9,956
+scenes; class-share spread ≤ 0.56%; residual exact-dHash overlap with
+train 16.9%→8.0% (val), 15.6%→6.2% (test) — remainder are cross-name
+near-duplicates, deferred (dHash-cluster grouping or pruning). +4 split
+tests (backend suite now 609 + 50 subtests). Phase 8D metrics (mAP50
+0.509, old split) are no longer comparable. Reports:
+`datasets/reports/split_fix_2026-07-04.md` + audit addendum. The full
+system was launch-verified end-to-end after the fix (YOLO detector,
+camera, live vision, WebSocket).
+
 ### Pending work (next session, in recommended order)
 
 1. ~~Checkpoint commit of 8G/8H/8I.1~~ — **done 2026-07-03**: commit `fe9fc19`, tag `v2.0-phase-8i1`, tests re-verified green immediately before committing; `assets/simulation_dataset/` images tracked per user decision.
 2. ~~CUDA torch install~~ — **done 2026-07-03** (env-only, zero project edits): torch 2.12.1+cu130, `torch.cuda.is_available()` True, verified incl. YOLODetector ONNX inference; ai+yolo tests 270 passed.
-3. **Dataset audit done 2026-07-03** — see `ai/object_detection/datasets/reports/dataset_audit_2026-07-03.md`. Key: near-duplicate split leakage (16.9% val / 15.6% test contaminated; metrics inflated), zero fire+person co-occurrence, 2 negatives. Fix cluster-aware split + merge D-Fire BEFORE the 50-epoch run.
-4. Then: manual D-Fire download + pipeline re-run + 50-epoch training (GPU, ~1–2 min/epoch); threshold calibration; possibly flip default detector to `yolo`.
+3. **Dataset audit done 2026-07-03** — see `ai/object_detection/datasets/reports/dataset_audit_2026-07-03.md`. Key: near-duplicate split leakage (16.9% val / 15.6% test contaminated; metrics inflated), zero fire+person co-occurrence, 2 negatives. ~~Fix cluster-aware split~~ — **done 2026-07-04 (Phase 8J, see above)**; merge D-Fire BEFORE the 50-epoch run.
+4. Then: manual D-Fire download + pipeline re-run + 50-epoch training (GPU, ~1–2 min/epoch) **on the new scene-aware split**; threshold calibration; possibly flip default detector to `yolo`.
 5. Optional: camera `seed: null` entropy mode; 8I.2 UX follow-ups (responsiveness < 1400 px, box-label edge overflow, replay scrubbing); pushing checkpoints to GitHub.
 
 ---

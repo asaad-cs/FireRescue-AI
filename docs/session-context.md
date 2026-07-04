@@ -1,6 +1,6 @@
 # FireRescue AI — Future Session Context
 
-> Paste this document at the start of any new AI session to provide complete project context without reading the repository. Last updated: 2026-07-03, end of Phase 8I.1 (dashboard UX redesign) — session handoff.
+> Paste this document at the start of any new AI session to provide complete project context without reading the repository. Last updated: 2026-07-04, end of Phase 8J (scene-aware dataset split) — session handoff.
 
 ---
 
@@ -27,7 +27,7 @@ A virtual drone explores a simulated building using breadth-first search, sensor
 | Git identity | `asaad-cs <ahmed.s.alfaidi@gmail.com>` (global config; fixed 2026-07-02 — the initial commit was amended from a placeholder identity and force-pushed with lease; the tag was moved to match) |
 | License | MIT |
 
-**Git state (2026-07-03, post-checkpoint):** branch `main`; HEAD = `fe9fc19` = annotated tag `v2.0-phase-8i1` (Phases 8G/8H/8I.1 checkpoint, tests verified green immediately before committing); earlier checkpoints `68fcc6f` = `v2.0-phase-8f` and `09f9388` = `v2.0-phase-8c`; all after MVP `c5edef9` (`v1.0.0`). Working tree clean. NOTHING beyond `v1.0.0` pushed to GitHub — all V2 commits and tags are local only. Generated data (raw downloads, merged/, processed/, checkpoints, exports, simulation/camera/images/) is gitignored — only code, configs, docs, tests, and reports are tracked. `assets/simulation_dataset/` (50 images, ~4 MB) IS tracked in git per user decision (2026-07-03) — the master library is reproducible from a fresh clone.
+**Git state (2026-07-04, post-checkpoint):** branch `main`; HEAD = annotated tag `v2.0-phase-8j` (Phase 8J scene-aware split checkpoint, tests verified green — 609 BE + 50 subtests — immediately before committing); earlier checkpoints `fe9fc19` = `v2.0-phase-8i1` (Phases 8G/8H/8I.1), `68fcc6f` = `v2.0-phase-8f`, `09f9388` = `v2.0-phase-8c`; all after MVP `c5edef9` (`v1.0.0`). Working tree clean. NOTHING beyond `v1.0.0` pushed to GitHub — all V2 commits and tags are local only. Generated data (raw downloads, merged/, processed/, checkpoints, exports, simulation/camera/images/) is gitignored — only code, configs, docs, tests, and reports are tracked. `assets/simulation_dataset/` (50 images, ~4 MB) IS tracked in git per user decision (2026-07-03) — the master library is reproducible from a fresh clone.
 
 ---
 
@@ -136,7 +136,7 @@ Built the full dataset pipeline in `ai/object_detection/data_tools/` (download, 
 
 - **Sources** (rationale in `ai/object_detection/docs/dataset-manifest.md`): Figshare CQU Fire-Smoke (11,027 imgs, CC BY 4.0, auto-downloaded + md5-verified), COCO 2017 val person subset (CC BY 4.0 annotations, auto-downloaded), D-Fire (21,527 imgs — login-gated, MANUAL download pending; steps in `docs/download_instructions.md`; its class order 0=smoke/1=fire is pre-mapped in sources.yaml and must be verified after download).
 - **Unified classes:** 0 fire · 1 smoke · 2 person. Reproduce with `python -m ai.object_detection.data_tools.download` then `...data_tools.pipeline` (seed 42, stratified 70/20/10).
-- **Result:** datasets/processed/ holds 12,545 images / 32,783 boxes (fire 12,043, smoke 9,963, person 10,777), split 8,781/2,509/1,255, validated CLEAN (0 errors; 1,169 byte-identical duplicates removed at merge). Reports in `datasets/reports/` (dataset_report.json/md, merge/split/quality_report.md — tracked in git). Raw/merged/processed data itself is gitignored; the pipeline skips missing sources and absorbs D-Fire automatically once it lands in `raw/dfire/`.
+- **Result:** datasets/processed/ holds 12,545 images / 32,783 boxes (fire 12,043, smoke 9,963, person 10,777), validated CLEAN (0 errors; 1,169 byte-identical duplicates removed at merge). Original per-image split 8,781/2,509/1,255 was superseded by the Phase 8J scene-aware split (8,783/2,515/1,247). Reports in `datasets/reports/` (dataset_report.json/md, merge/split/quality_report.md — tracked in git). Raw/merged/processed data itself is gitignored; the pipeline skips missing sources and absorbs D-Fire automatically once it lands in `raw/dfire/`.
 
 ### Phase 8D — First training run (complete, 2026-07-03, smoke test)
 Trained yolov8n for 5 epochs (in-memory override of the committed 50; configs untouched) on CPU (~4h15m — torch is CPU-only; the machine's RTX 3060 Ti is unused until a CUDA torch build is installed). Run `firerescue-detector-20260703-003931` under `models/checkpoints/` (gitignored): best.pt/last.pt, results.csv, TensorBoard logs, curves, evaluation/ artifacts. **Val metrics (standard protocol): P 0.621 / R 0.458 / mAP50 0.509 / mAP50-95 0.270** — still climbing at epoch 5, far from converged. ONNX export verified (11.7 MB, opset 20, `images [1,3,640,640]` → `[1,7,8400]`) and copied to `models/exports/`. Full report: `ai/object_detection/models/reports/training_report.md` (tracked).
@@ -155,6 +155,9 @@ The operator sees what the AI sees. `YOLODetector` adds a `vision` payload (base
 
 ### Phase 8I.1 — Professional dashboard UX redesign (complete 2026-07-03, committed `v2.0-phase-8i1`, frontend-only)
 Emergency-operations-center layout: **`MissionCamera`** is the primary element, built on a `CameraMediaSource` abstraction (`image` today; `video`/`stream` kinds typed + reserved so future video needs only the `CameraMedia` switch — a deliberate video-first design decision). `DetectionCards` (🔥/🌫/👤 status cards), `MissionOpsPanel` (status, timer, rooms scanned/remaining, victims, hazards, detector/model/inference/camera source), enlarged glowing tactical map with explored-progress track, alert cards with level accent bars, polished timeline (visually ready for future replay controls). `AIVisionPanel` from 8G was superseded and removed; all its capabilities and tests were ported to `MissionCamera`. All 295 original frontend tests pass unmodified; 24 new component tests.
+
+### Phase 8J — Scene-aware dataset split (complete 2026-07-04, committed `v2.0-phase-8j`)
+Fixed the audit's 🔴 finding 1 (near-duplicate split leakage). `data_tools/split.py` now assigns whole **scenes** — merged file names with the Roboflow `.rf.<32-hex>` export suffix stripped — instead of single images, stratified by dominant class signature, deterministic under seed 42; `splits.json` records `method: "scene"` + scene stats. Dataset regenerated via the full pipeline: **8,783 / 2,515 / 1,247** (70.0/20.0/9.9%), 12,545 images unchanged, validator CLEAN. Verified independently: **0 scenes span splits** (9,956 scenes, 1,061 multi-image, largest 22); class-share spread across splits ≤ 0.56%; residual exact-dHash overlap with train fell **16.9% → 8.0% (val)** and **15.6% → 6.2% (test)** — the remainder are cross-name near-duplicates (video frames/re-uploads), fixable later via dHash-cluster grouping or pruning. **Phase 8D metrics (mAP50 0.509) were measured on the old split and are NOT comparable to anything evaluated on the new one.** +4 tests in `tests/test_split.py` (16 total). Reports: `datasets/reports/split_fix_2026-07-04.md` (technical report) + addendum in `dataset_audit_2026-07-03.md`. Post-fix, the full system was launch-verified end-to-end (YOLO detector, camera, live vision on the dashboard).
 
 ---
 
@@ -216,14 +219,15 @@ ai/
 ## Current Test Counts (verified 2026-07-02)
 
 ```
-Backend:    605 tests + 50 subtests   (python -m pytest)
-            = 286 MVP + 218 AI + 40 YOLO integration + 34 camera
+Backend:    609 tests + 50 subtests   (python -m pytest)
+            = 286 MVP + 222 AI + 40 YOLO integration + 34 camera
               + 10 vision-state + 17 library-export
 Frontend:   319 tests / 17 files       (npx vitest run)
             = 295 original MVP (unmodified) + 24 Phase 8I.1 components
 TypeScript: 0 errors                   (npx tsc --noEmit)
 ```
-(verified 2026-07-03, end of Phase 8I.1)
+(backend verified 2026-07-04, end of Phase 8J; frontend/tsc verified
+2026-07-03, end of Phase 8I.1 — untouched since)
 
 ---
 
@@ -259,7 +263,7 @@ MVP (unchanged from v1.0.0):
 Version 2 (current):
 9. D-Fire is not merged yet — its download is manual (login required); the dataset has only 2 negative samples (and the camera's `safe/` category only those 2 images) until D-Fire's 9,838 negatives arrive
 10. Person images come from COCO val2017 only (≈2,700); fire+person co-occurrence is under-represented (scale-up path documented in download_instructions.md); master-library person-combination folders (fire_person/ etc.) are empty and rely on the provider's fallback chain
-11. The deployed model is the 5-epoch smoke-test baseline (val mAP50 0.509) — noticeable false positives (LOW smoke suspicions, ~0.27 spurious victim confidence in safe zones); the 50-epoch run is pending
+11. The deployed model is the 5-epoch smoke-test baseline (val mAP50 0.509, measured on the pre-8J leaky split — not comparable to the new scene-aware split) — noticeable false positives (LOW smoke suspicions, ~0.27 spurious victim confidence in safe zones); the 50-epoch run is pending. Residual cross-name near-duplicates remain (~8% val / ~6% test share an exact dHash with train)
 12. Torch is now CUDA-enabled (2.12.1+cu130, RTX 3060 Ti) — training expected ~1–2 min/epoch; backend ONNX inference still runs on CPU by design (~25–450 ms/frame, fine at 1 s ticks)
 13. `perception_detector` default remains "ground_truth"; "yolo" is opt-in until the real model lands
 14. Dashboard: detection-box labels can overflow the image edge for detections near borders; layout is tuned for ≥1400 px wide screens; camera video/stream source kinds are typed but intentionally unimplemented
@@ -282,6 +286,7 @@ Version 2 (current):
 | 8G | Live AI Vision dashboard (MissionState.vision, image + boxes to operator) | Complete |
 | 8H | Permanent simulation image library (assets/ master + export tool) | Complete |
 | 8I.1 | Professional dashboard UX redesign (MissionCamera, EOC layout) | Complete |
+| 8J | Scene-aware dataset split (leakage fix + dataset regeneration + verification) | Complete |
 | **next** | **To be defined by the user — do not start without instruction** | **NEXT** |
 | — | Fire detection, SLAM/mapping, sensor fusion modules | Future |
 
@@ -293,13 +298,12 @@ Integration path (unchanged, requires zero frozen-module edits): a learned detec
 
 ## THE EXACT NEXT TASK
 
-> **Note:** Phases 8A–8I.1 are all complete and committed (tags `v2.0-phase-8c` / `v2.0-phase-8f` / `v2.0-phase-8i1`). Do NOT redo any of them. The system runs end-to-end: simulated camera → YOLO ONNX inference → MissionState (incl. vision payload) → redesigned EOC dashboard.
+> **Note:** Phases 8A–8J are all complete and committed (tags `v2.0-phase-8c` / `v2.0-phase-8f` / `v2.0-phase-8i1` / `v2.0-phase-8j`). Do NOT redo any of them. The system runs end-to-end: simulated camera → YOLO ONNX inference → MissionState (incl. vision payload) → redesigned EOC dashboard. The dataset split is now scene-aware and leakage-verified.
 
-**The next phase is not yet defined — wait for the user.** Session 2026-07-03 (later): CUDA torch installed (see decision 11) and a full dataset audit performed — **read `ai/object_detection/datasets/reports/dataset_audit_2026-07-03.md` before any training decision.** Its headline: per-image splitting leaks near-duplicates (16.9% of val / 15.6% of test have a train near-duplicate — all metrics inflated ~5–10 mAP50 pts), zero fire+person co-occurrence, only 2 negatives. Recommended order:
-1. **Cluster-aware split fix** in `data_tools/split.py` (split by perceptual-hash/scene group, not per image) — prerequisite for trustworthy metrics.
-2. **Manual D-Fire download + pipeline re-run** (docs/download_instructions.md; +21.5k imgs incl. 9,838 negatives — biggest precision win; verify its 0=smoke/1=fire order).
-3. **The full 50-epoch training run** (GPU-ready now, ~1–2 min/epoch), then threshold calibration from PR/F1 curves, consider flipping `perception_detector` default to "yolo".
-4. Possible 8I.2 UX follow-ups: responsive breakpoints below ~1400 px, box-label overflow at image edges, replay scrubbing controls in the timeline.
+**The next phase is not yet defined — wait for the user.** Read `ai/object_detection/datasets/reports/dataset_audit_2026-07-03.md` (incl. its 2026-07-04 addendum) and `split_fix_2026-07-04.md` before any training decision. The split leakage fix is DONE (Phase 8J); remaining audit findings: zero fire+person co-occurrence, only 2 negatives, residual cross-name near-duplicates (~8% val / ~6% test). Recommended order:
+1. **Manual D-Fire download + pipeline re-run** (docs/download_instructions.md; +21.5k imgs incl. 9,838 negatives — biggest precision win; verify its 0=smoke/1=fire order; it is partly video-derived, so consider dHash-cluster scene grouping in the same pass).
+2. **The full 50-epoch training run on the NEW split** (GPU-ready, ~1–2 min/epoch), then threshold calibration from PR/F1 curves, consider flipping `perception_detector` default to "yolo". Phase 8D's mAP50 0.509 (old split) is not a valid baseline for comparison.
+3. Possible 8I.2 UX follow-ups: responsive breakpoints below ~1400 px, box-label overflow at image edges, replay scrubbing controls in the timeline.
 
 Also pending user decisions: pushing all checkpoints to GitHub.
 

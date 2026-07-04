@@ -9,6 +9,7 @@ from ai.object_detection.data_tools.split import (
     assign_splits,
     class_signature,
     load_splits,
+    scene_key,
     write_split_report,
 )
 from ai.object_detection.tests._helpers import write_image, write_label
@@ -38,6 +39,19 @@ class TestClassSignature(unittest.TestCase):
         self.assertEqual(class_signature({1, 0}, names), "fire+smoke")
         self.assertEqual(class_signature({2, 0, 1}, names),
                          "fire+smoke+person")
+
+
+class TestSceneKey(unittest.TestCase):
+
+    def test_roboflow_suffix_is_stripped(self):
+        name = "figshare__fire-42-_jpg.rf." + "a" * 32 + ".jpg"
+        self.assertEqual(scene_key(name), "figshare__fire-42-_jpg")
+
+    def test_plain_names_are_their_own_scene(self):
+        self.assertEqual(scene_key("coco__000000123.jpg"),
+                         "coco__000000123")
+        # A short or non-hex tail is not an export suffix.
+        self.assertEqual(scene_key("img.rf.zz.jpg"), "img.rf.zz")
 
 
 class TestAssignSplits(SplitTestBase):
@@ -86,6 +100,37 @@ class TestAssignSplits(SplitTestBase):
                 self.assertGreater(
                     result.signature_counts[signature][split], 0,
                     f"{signature} missing from {split}")
+
+    def test_scene_variants_never_straddle_splits(self):
+        for scene in range(30):
+            for variant in range(3):
+                digest = f"{scene * 100 + variant:032x}"
+                stem = f"src__photo{scene}_jpg.rf.{digest}"
+                write_image(self.merged / "images" / f"{stem}.png",
+                            color=(scene, variant, 9))
+                write_label(self.merged / "labels" / f"{stem}.txt",
+                            ["0 0.5 0.5 0.2 0.2"])
+        result = assign_splits(self.merged, seed=42)
+        self.assertEqual(len(result.assignments), 90)
+        for scene in range(30):
+            splits = {
+                result.assignments[name]
+                for name in result.assignments
+                if scene_key(name) == f"src__photo{scene}_jpg"
+            }
+            self.assertEqual(len(splits), 1,
+                             f"scene {scene} straddles splits: {splits}")
+        self.assertEqual(result.scenes_total, 30)
+        self.assertEqual(result.multi_image_scenes, 30)
+        self.assertEqual(result.largest_scene, 3)
+
+    def test_splits_json_records_scene_method(self):
+        self.populate(10)
+        assign_splits(self.merged, seed=42)
+        raw = json.loads(
+            (self.merged / "splits.json").read_text(encoding="utf-8"))
+        self.assertEqual(raw["method"], "scene")
+        self.assertEqual(raw["scenes"]["total"], 10)
 
     def test_tiny_group_goes_to_train(self):
         self.populate(1)

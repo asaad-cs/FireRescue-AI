@@ -1,18 +1,31 @@
-"""Reproducible train/val/test splitting of the merged dataset.
+"""Reproducible, leakage-free train/val/test splitting.
 
-Assignments are deterministic: files are grouped by their class
-signature (which classes appear in the image, or 'negative'), each
-group is sorted and shuffled with a fixed seed, and sliced by the
-configured ratios. The same merged dataset, seed, and ratios always
-produce byte-identical splits. Stratifying by signature keeps the
-class balance similar across train, val, and test.
+Assignments are deterministic and scene-aware. The raw sources
+contain multiple export variants of the same original photograph —
+Roboflow-style pipelines emit every augmented/recompressed copy as
+`<original-stem>_jpg.rf.<32-hex-digest>.jpg`, so the variants have
+different bytes (md5 deduplication in the merge step cannot see them)
+but show the exact same scene. Splitting per image scattered such
+twins across train, val, and test and inflated every evaluation
+metric.
+
+The fix: images are first grouped by scene — the merged file name
+with the Roboflow export suffix stripped — and every scene is
+assigned to exactly one split. Scenes are stratified by class
+signature (which classes their images contain, or 'negative'),
+shuffled with a fixed seed, and dealt whole to train, then val, then
+test until each split's image quota is filled. The same merged
+dataset, seed, and ratios always produce byte-identical splits, and
+the class balance stays similar across splits.
 
 The result is written to merged/splits.json; the build step consumes
 it to assemble datasets/processed/.
 """
 import json
 import random
+import re
 import sys
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +41,10 @@ SPLIT_NAMES = ("train", "val", "test")
 DEFAULT_RATIOS = (0.7, 0.2, 0.1)
 DEFAULT_SEED = 42
 
+# Roboflow export suffix: every augmented/recompressed variant of one
+# original is named <original-stem>.rf.<md5-of-the-variant>.<ext>.
+_ROBOFLOW_SUFFIX = re.compile(r"\.rf\.[0-9a-f]{32}$")
+
 
 @dataclass
 class SplitResult:
@@ -38,6 +55,10 @@ class SplitResult:
     created_at: str
     assignments: dict[str, str] = field(default_factory=dict)
     signature_counts: dict[str, dict[str, int]] = field(default_factory=dict)
+    scenes_total: int = 0
+    multi_image_scenes: int = 0
+    images_in_multi_image_scenes: int = 0
+    largest_scene: int = 0
 
     def split_counts(self) -> dict[str, int]:
         """Images per split."""
@@ -45,6 +66,25 @@ class SplitResult:
         for split in self.assignments.values():
             counts[split] += 1
         return counts
+
+
+def scene_key(file_name: str) -> str:
+    """Identify the scene a merged image belongs to.
+
+    Export variants of the same original photograph share their file
+    name up to the Roboflow `.rf.<hex>` suffix; stripping it (plus the
+    extension) collapses them into one scene. Names without the suffix
+    are their own scene, so unaugmented sources keep per-image
+    behavior.
+
+    Args:
+        file_name: Merged image file name, e.g.
+            'figshare_fire_smoke__fire-42-_jpg.rf.<32 hex chars>.jpg'.
+
+    Returns:
+        The scene identifier, e.g. 'figshare_fire_smoke__fire-42-_jpg'.
+    """
+    return _ROBOFLOW_SUFFIX.sub("", Path(file_name).stem)
 
 
 def class_signature(class_ids: set[int], names: list[str]) -> str:
@@ -69,6 +109,9 @@ def assign_splits(
 ) -> SplitResult:
     """Deterministically assign every merged image to a split.
 
+    Assignment operates on whole scenes, never on single images, so
+    export variants of one photograph can never straddle two splits.
+
     Args:
         merged_dir: Merged dataset (images/ + labels/).
         ratios: train/val/test fractions; must sum to 1.
@@ -90,7 +133,8 @@ def assign_splits(
                          "the merge step first")
     names = load_dataset_config().names
 
-    groups: dict[str, list[str]] = {}
+    signatures: dict[str, str] = {}
+    scenes: dict[str, list[str]] = {}
     for image in sorted(images_dir.iterdir()):
         if not image.is_file():
             continue
@@ -100,36 +144,54 @@ def assign_splits(
             if label.is_file()
             else set()
         )
-        groups.setdefault(class_signature(ids, names), []).append(image.name)
-    if not groups:
+        signatures[image.name] = class_signature(ids, names)
+        scenes.setdefault(scene_key(image.name), []).append(image.name)
+    if not scenes:
         raise ValueError(f"no images found under {images_dir}")
 
     result = SplitResult(
         seed=seed,
         ratios=tuple(ratios),
         created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        scenes_total=len(scenes),
+        multi_image_scenes=sum(1 for m in scenes.values() if len(m) > 1),
+        images_in_multi_image_scenes=sum(
+            len(m) for m in scenes.values() if len(m) > 1
+        ),
+        largest_scene=max(len(m) for m in scenes.values()),
     )
+
+    # Stratify whole scenes by their dominant class signature.
+    groups: dict[str, list[list[str]]] = {}
+    for key in sorted(scenes):
+        members = scenes[key]
+        counts = Counter(signatures[name] for name in members)
+        top = max(counts.values())
+        signature = min(s for s, c in counts.items() if c == top)
+        groups.setdefault(signature, []).append(members)
+
     rng = random.Random(seed)
     for signature in sorted(groups):
-        files = sorted(groups[signature])
-        rng.shuffle(files)
-        n = len(files)
+        scene_list = groups[signature]
+        rng.shuffle(scene_list)
+        n = sum(len(members) for members in scene_list)
         n_train = round(n * ratios[0])
         n_val = round(n * ratios[1])
         # Tiny groups go entirely to train rather than starving it.
         if n_train == 0:
             n_train, n_val = n, 0
-        buckets = {
-            "train": files[:n_train],
-            "val": files[n_train:n_train + n_val],
-            "test": files[n_train + n_val:],
-        }
-        result.signature_counts[signature] = {
-            split: len(members) for split, members in buckets.items()
-        }
-        for split, members in buckets.items():
+        counts = {split: 0 for split in SPLIT_NAMES}
+        for members in scene_list:
+            if counts["train"] < n_train:
+                split = "train"
+            elif counts["val"] < n_val:
+                split = "val"
+            else:
+                split = "test"
+            counts[split] += len(members)
             for name in members:
                 result.assignments[name] = split
+        result.signature_counts[signature] = counts
 
     (merged_dir / "splits.json").write_text(
         json.dumps(
@@ -137,6 +199,15 @@ def assign_splits(
                 "seed": result.seed,
                 "ratios": list(result.ratios),
                 "created_at": result.created_at,
+                "method": "scene",
+                "scenes": {
+                    "total": result.scenes_total,
+                    "multi_image": result.multi_image_scenes,
+                    "images_in_multi_image": (
+                        result.images_in_multi_image_scenes
+                    ),
+                    "largest": result.largest_scene,
+                },
                 "assignments": result.assignments,
             },
             indent=2,
@@ -198,11 +269,23 @@ def write_split_report(result: SplitResult, path: Path) -> Path:
         lines.append(f"| {split} | {counts[split]} | {share:.1%} |")
     lines += [
         "",
+        "## Leakage prevention (scene-aware assignment)",
+        "",
+        "Export variants of the same original photograph (Roboflow",
+        "`.rf.<hex>` copies — augmented or recompressed) are grouped",
+        "into one scene, and every scene is assigned to exactly one",
+        "split, so no photograph can appear in both train and val/test.",
+        "",
+        f"- Scenes: {result.scenes_total} "
+        f"({result.multi_image_scenes} with more than one image,"
+        f" covering {result.images_in_multi_image_scenes} images)",
+        f"- Largest scene: {result.largest_scene} images",
+        "",
         "## Stratification by class signature",
         "",
-        "Images are grouped by the set of classes they contain and each",
-        "group is split independently, so every split sees a similar",
-        "class mixture.",
+        "Scenes are grouped by the dominant set of classes their",
+        "images contain and each group is split independently, so every",
+        "split sees a similar class mixture.",
         "",
         "| Signature | Train | Val | Test |",
         "|---|---|---|---|",

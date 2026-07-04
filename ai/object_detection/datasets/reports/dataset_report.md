@@ -1,7 +1,7 @@
 # Dataset Validation Report — processed
 
 - **Root:** `C:\Users\Administrator\Desktop\FireRescue-AI\ai\object_detection\datasets\processed`
-- **Checked:** 2026-07-02T21:07:07+00:00
+- **Checked:** 2026-07-04T03:00:23+00:00
 - **Deep decode check:** no (header probe only)
 - **Verdict:** **CLEAN** — 0 error(s), 2 warning(s)
 
@@ -13,9 +13,9 @@
 | Label files | 12545 |
 | Annotations | 32783 |
 | Negative samples (empty labels) | 2 |
-| Images in `test` | 1255 |
-| Images in `train` | 8781 |
-| Images in `val` | 2509 |
+| Images in `test` | 1247 |
+| Images in `train` | 8783 |
+| Images in `val` | 2515 |
 
 ## Annotations per class
 

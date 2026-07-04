@@ -14,7 +14,8 @@ signature. No project files were modified by the audit itself.
 
 ## Headline findings
 
-1. 🔴 **Train/val/test near-duplicate leakage.** The pipeline dedupes by
+1. 🔴 **Train/val/test near-duplicate leakage.** *(FIXED 2026-07-04 —
+   see addendum at the end of this report.)* The pipeline dedupes by
    md5 (byte-identical only). dHash finds **1,038 clusters of visually
    identical images (2,617 images, 20.9%)** — Roboflow augmented variants
    and adjacent video frames. Because the split is per-image:
@@ -75,7 +76,7 @@ the 50-epoch run.**
 
 ## Recommendations (highest impact first)
 
-1. Cluster-aware split (fix leakage) — prerequisite for trustworthy metrics
+1. ~~Cluster-aware split (fix leakage)~~ — **done 2026-07-04, see addendum**
 2. Merge D-Fire (negatives → precision); verify 0=smoke/1=fire order
 3. Label persons already visible in fire images (fire+person co-occurrence)
 4. Add lying/collapsed-pose victim imagery
@@ -83,3 +84,33 @@ the 50-epoch run.**
 6. Scale persons via COCO train2017 subset (documented path)
 7. Prune junk/baked-augmentation samples (dup clusters give the list)
 8. Threshold calibration on the cleaned split after training
+
+---
+
+## Addendum 2026-07-04 — Finding 1 fixed (scene-aware split)
+
+`data_tools/split.py` now assigns whole **scenes** (merged file name
+with the Roboflow `.rf.<32-hex>` export suffix stripped) instead of
+single images, stratified by dominant class signature, deterministic
+under seed 42. The dataset was regenerated via the full pipeline
+(merge → split → build → validate → quality) and re-verified:
+
+- New split: **8,783 / 2,515 / 1,247** (70.0 / 20.0 / 9.9%), 12,545
+  images unchanged, validator verdict CLEAN (0 errors; the 2 warnings
+  are the 2 known negative samples).
+- **Scene leakage: 0** — 9,956 scenes (1,061 multi-image, covering
+  3,650 images; largest 22), none spans more than one split.
+- Class balance held: per-class image-share spread across splits
+  ≤ 0.6% for fire, ≤ 0.2% for smoke/person.
+- **Residual near-duplicate overlap** (exact-dHash match with train,
+  same 64-bit dHash method as this audit): val **201/2,515 (8.0%,
+  was 16.9%)**, test **77/1,247 (6.2%, was 15.6%)**. The remainder
+  are visually identical images whose file names share no Roboflow
+  stem (adjacent video frames, re-uploads) — invisible to the scene
+  key. Fully eliminating them requires hash-cluster grouping or
+  pruning (recommendation 7).
+- Consequence: **metrics on the new val/test are not comparable to
+  Phase 8D numbers** (mAP50 0.509 was measured on the old, leakier
+  split). Re-evaluate any model on the new split only.
+
+Full details: `split_fix_2026-07-04.md` in this directory.
