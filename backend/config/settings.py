@@ -53,6 +53,14 @@ class Settings:
     camera_enabled: bool = True
     camera_config_path: str = "simulation/camera/simulation_camera.yaml"
 
+    # Demo Mode (Phase Demo.2): when true, the simulated camera reads
+    # imagery from assets/demo_dataset/ instead of the normal runtime
+    # folder (simulation/camera/images/). Nothing else changes — same
+    # config file, same category resolution, same selection algorithm;
+    # only the image root swaps. Default False keeps Production Mode as
+    # the unconditional default.
+    camera_demo_mode: bool = False
+
     # Future placeholders (not used in Phase 3)
     database_url: str = "sqlite:///./firerescue.db"
     max_active_missions: int = 1

@@ -2,8 +2,8 @@
 
 **Version:** 1.0.0 (MVP, frozen) + Version 2 in progress  
 **Date:** 2026-07-04 (MVP sections below reflect 2026-07-01)  
-**Current Phase:** Version 2 — Phase 8J complete (scene-aware dataset split)  
-**Overall Status:** Fully operational end to end. 609 BE (+50 subtests) + 319 FE tests pass. 0 TypeScript errors.
+**Current Phase:** Version 2 — Phase AI.1 complete (model retrained on GPU + fully live-validated; verdict "Demo Ready with Minor Issues"). Everything from Phase 8K onward is uncommitted, awaiting checkpoint approval.  
+**Overall Status:** Fully operational end to end, in both Production Mode and the new Demo Mode. 623 BE (+50 subtests) + 334 FE tests pass. 0 TypeScript errors.
 
 ---
 
@@ -23,6 +23,17 @@ has delivered a complete AI vision loop:
 | 8H | Permanent image library `assets/simulation_dataset/` + export tool | Committed (`v2.0-phase-8i1`) |
 | 8I.1 | EOC dashboard redesign — `MissionCamera` (video-ready), detection cards, ops panel | Committed (`v2.0-phase-8i1`) |
 | 8J | Scene-aware dataset split — Roboflow-variant leakage fixed, dataset regenerated (8,783/2,515/1,247), 0-leakage verified, residual dHash overlap halved (16.9→8.0% val, 15.6→6.2% test) | Committed (`v2.0-phase-8j`) |
+| 8K | Camera experience — mission-scoped no-repeat image pool, per-mission random mode (`seed: null`, logged effective seed) + MissionCamera redesigned as a live camera monitor (HUD, edge-aware labels, link states) | **Uncommitted** (see `docs/phase-8k-report.md`) |
+| 9A | Dataset assessment (read-only) — training set is ~85% outdoor, near-zero building-interior imagery | Complete |
+| 9B | Curation staging — found 58 residential + 18 indoor-training-facility real images, plus a 49-image toy-model trap | Complete |
+| 9B promotion (10A.4) | 234 images promoted into `assets/simulation_dataset/_curation/{approved,manual_review,rejected}/` | Complete, **uncommitted** |
+| 10A.1–10A.4 | Findings persisted; README dataset standard extended; Architecture-B folders built then reversed; **Architecture A decided as the sole final standard** | Complete |
+| 10B.1 | Filesystem migrated to Architecture A only | Complete |
+| Scene-aware design doc | Environment model, selection strategy, migration plan (chat-only) | Complete, **NOT implemented/approved** |
+| Demo.1–Demo.3 | Isolated demo dataset built (156→202 imgs), validated, Demo Mode switch added (1 settings flag), live-verified end to end | Complete |
+| Demo.4 | `ZoneImageProvider` recycle-boundary repetition bug fixed (12 lines, `provider.py`) | Complete |
+| Demo.5–Demo.6 | Safe category expanded 2 → 48 images from existing repo assets only (raw unused COCO pool discovered) | Complete |
+| AI.1 | Model retrained 60 epochs on GPU (RTX 3060 Ti); full old-vs-new comparison + 7-mission live validation | Complete — **B) Demo Ready with Minor Issues** |
 
 Data flow now: Simulation → CameraSimAdapter (zone → real image) →
 YOLODetector (ONNX) → DetectionResult → MissionState (incl. vision

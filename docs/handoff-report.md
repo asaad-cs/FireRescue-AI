@@ -1,7 +1,7 @@
 # FireRescue AI — Handoff Report
 
-**Date:** 2026-07-04 (§0 — Version 2 session handoff) / 2026-07-01 (§1+ — MVP v1.0 handoff, preserved unchanged)  
-**Status:** Fully operational. All tests pass (609 BE + 50 subtests, 319 FE, tsc 0). All phases through 8J committed (`v2.0-phase-8j`, local only).
+**Date:** 2026-07-05 (§0 — Version 2 session handoff, extended) / 2026-07-01 (§1+ — MVP v1.0 handoff, preserved unchanged)  
+**Status:** Fully operational, in both Production Mode and the new Demo Mode. All tests pass (623 BE + 50 subtests, 334 FE, tsc 0). Phases through 8J committed (`v2.0-phase-8j`, local only); **everything from Phase 8K through Phase AI.1 is complete, fully verified, and entirely uncommitted.**
 
 ---
 
@@ -50,13 +50,129 @@ tests (backend suite now 609 + 50 subtests). Phase 8D metrics (mAP50
 system was launch-verified end-to-end after the fix (YOLO detector,
 camera, live vision, WebSocket).
 
+### Phase 8K — Camera experience + live camera monitor (2026-07-04, UNCOMMITTED)
+
+Implemented and fully verified the camera/UX phase (report:
+`docs/phase-8k-report.md`): mission-scoped no-repeat image pool with
+balanced recycling and sticky zone assignments; three selection modes
+with `seed: null` (fresh logged entropy seed per mission) as the new
+committed default; MissionCamera redesigned as a live camera monitor
+(stage HUD, scanlines, frame fade-in, edge-aware detection labels,
+LIVE/STALE/ACQUIRING SIGNAL/standby link states via new optional
+`wsStatus`/`isStale` props, Targets+Link telemetry, contacts chip,
+history detection dots). Suites: 619 BE (+50 subtests) / 334 FE / tsc 0;
+all pre-8K tests pass unmodified. Live-verified end to end (two missions,
+distinct effective seeds, fire 0.92 in Loading Dock over WebSocket),
+then fully visually verified (screenshots in
+`Desktop\firerescue-8k-screenshots\`). The **8K.1 fix pass** closed the
+three UX issues that verification surfaced (mission-scoped history rail,
+REPLAY badge + frozen history during replay, HUD bands that structurally
+prevent HUD/label overlap — all frontend-only) and discovered a
+pre-existing backend issue (restart path doesn't stop the old adapter —
+deliberately NOT fixed, see report §7).
+**Awaiting user approval for the checkpoint commit (suggested tag
+`v2.0-phase-8k`).**
+
+### Phase 9A/9B/10 — Simulation Library gap analysis + partial curation (2026-07-04/05, UNCOMMITTED)
+
+Full detail: `ai/object_detection/datasets/reports/phase9b_promotion_manifest_2026-07-05.md`.
+
+**Completed:** Phase 9A read-only dataset assessment (training set is ~85%
+outdoor, near-zero building-interior content); Phase 9B curation staging (an
+exhaustive filename search — not just random sampling — found a previously-
+missed real cluster: 58 residential house-fire images, 18 indoor training-
+facility images, plus a 49-image toy/miniature-model trap that looks
+convincing at a glance); Phase 9B promotion, roadmap step 10A.4 (234 unique
+images copied from session scratch space into
+`assets/simulation_dataset/_curation/{approved,manual_review,rejected}/` — 14
+Approved, 165 Manual Review, 55 Rejected preserved; independently re-verified
+afterward to have zero effect on the runtime pipeline); a design-existence
+audit (Phase 10, confirmed no prior Simulation Library architecture doc
+exists beyond `assets/simulation_dataset/README.md`); a separate architectural
+review of the full Scenario→Camera→Frontend component chain and data flow;
+and a Scene-Aware Simulation Architecture design document (chat-only, not
+yet persisted as a repo file).
+
+**Not done / pending:** roadmap steps 10A.2 (README target-count and
+acceptance-rule sections), 10A.3 (new environment folders + promotion into
+the live/exported library), and 10A.5 (sourcing-strategy decision) — none
+executed. Manual adjudication of the 165 Manual Review images. A decision on
+one flagged special case (a genuine kitchen-fire photo currently mis-tiered
+as a "letterboxing example"). Scene-aware implementation itself — contingent
+on approval of the design document.
+
+**Deferred on purpose:** D-Fire download (Phase 9A found it would not close
+the building-scene gap — safe to postpone independently); any new image
+sourcing/searching (out of scope by explicit instruction throughout); making
+the simulator scene-aware (deliberately withheld from the promotion step to
+keep the runtime pipeline provably untouched).
+
+`ZoneCategoryResolver` remains hazard-category only — the simulator is not
+scene-aware today, and this pass did not change that.
+
+### Phases 10A.2 → AI.1 — Architecture Finalization, Demo System, Model Retrain (2026-07-05, ALL UNCOMMITTED)
+
+Full detail in `docs/session-context.md` (authoritative — every phase below has its
+own dated subsection there). Summary in chronological order:
+
+1. **10A.2** — `assets/simulation_dataset/README.md` extended additively (target
+   counts, acceptance rules, curation workflow; 138 insertions, 0 deletions).
+2. **10A.3** — built a proposed "Environment → Scene" folder structure (8 top-level
+   dirs + 35 subfolders, all empty).
+3. **10A.4** — architectural review found that structure would be silently
+   mis-scanned by the (unmodified) export tool's default invocation. **Final
+   decision: Architecture A (Category → Scene, the pre-existing Phase 8H shape)
+   is the sole official standard** — no hybrid, no Environment-first structure.
+4. **10B.1** — reversed 10A.3: removed all 43 empty directories (zero data loss,
+   nothing had ever been committed). The 6 environments with no existing
+   Architecture-A home (hospital/mall/school/residential/industrial/outdoor)
+   remain an open, honestly-unresolved gap.
+5. **Scene-Aware design document** — a full architecture proposal (environment
+   model, selection-strategy fallback chain, migration plan) produced in chat.
+   **Not implemented. Not approved.**
+6. **Demo.1–Demo.3** — built `assets/demo_dataset/` (isolated from both the
+   master library and `_curation/`), validated every image against the exact
+   decode path the provider uses, added Demo Mode as **one** settings flag
+   (`camera_demo_mode`, default `False`) plus a ~7-line conditional in
+   `make_data_source()` — zero changes to selection logic, resolver, or config
+   format. Live-verified end to end (real backend, real WebSocket, full
+   mission lifecycle). Verdict at that point: Demo Ready (92%).
+7. **Demo.4** — fixed a real gap found by a read-only investigation: on pool
+   recycle, the image that had just closed a cycle could immediately reopen
+   the next one. Fixed with one new dict (`_last_shown`) and ~12 lines total
+   in `ZoneImageProvider._pick_unused()`; single-image categories provably
+   unaffected. +4 tests, 623 total, zero regressions.
+8. **Demo.5–Demo.6** — expanded the Safe category from 2 images to **48**,
+   using only pre-existing repo assets: 1 new master-library image
+   (`cleanroom.jfif`, extension-corrected on the copy only) plus 45 images
+   mined from a previously-unexamined pool — the 2,307 raw COCO val2017
+   images that were excluded from training for having no person. Also
+   discovered and reported (not silently fixed): the original 2 "negative"
+   Safe images are visually **not** safe (an active wildfire and a
+   smoke/steam plume) — they were only "negative" by empty annotation.
+9. **Phase AI.1** — retrained the YOLO model on GPU: 60 epochs (vs. the
+   original 5, CPU), batch 32, cosine LR, patience 15; new run
+   `firerescue-detector-20260705-064246`, original checkpoint untouched.
+   True old-model baseline finally measured on the corrected split: mAP50
+   0.3997 (not the previously-cited, leakage-inflated 0.509). New model:
+   mAP50 0.601, mAP50-95 0.334, recall up across all 3 classes (smoke +0.124
+   the largest gain). Live-validated across 7 real missions: 6/6 fire
+   detections, 11/12 victim detections, zero crashes. Root-caused every
+   remaining false positive with directly captured evidence: 5 are animal→
+   person misclassifications (zebras/dog/bird/horse/seagulls, all
+   low-confidence — the training corpus has zero animal images anywhere),
+   2 are the same pre-existing mislabeled Safe images from Demo.5, 1 is a
+   single low-light instance. **Verdict: B) Demo Ready with Minor Issues.**
+   **Training has converged — more epochs will not help further; the
+   bottleneck is now data quality, specifically indoor building imagery.**
+
 ### Pending work (next session, in recommended order)
 
 1. ~~Checkpoint commit of 8G/8H/8I.1~~ — **done 2026-07-03**: commit `fe9fc19`, tag `v2.0-phase-8i1`, tests re-verified green immediately before committing; `assets/simulation_dataset/` images tracked per user decision.
 2. ~~CUDA torch install~~ — **done 2026-07-03** (env-only, zero project edits): torch 2.12.1+cu130, `torch.cuda.is_available()` True, verified incl. YOLODetector ONNX inference; ai+yolo tests 270 passed.
 3. **Dataset audit done 2026-07-03** — see `ai/object_detection/datasets/reports/dataset_audit_2026-07-03.md`. Key: near-duplicate split leakage (16.9% val / 15.6% test contaminated; metrics inflated), zero fire+person co-occurrence, 2 negatives. ~~Fix cluster-aware split~~ — **done 2026-07-04 (Phase 8J, see above)**; merge D-Fire BEFORE the 50-epoch run.
 4. Then: manual D-Fire download + pipeline re-run + 50-epoch training (GPU, ~1–2 min/epoch) **on the new scene-aware split**; threshold calibration; possibly flip default detector to `yolo`.
-5. Optional: camera `seed: null` entropy mode; 8I.2 UX follow-ups (responsiveness < 1400 px, box-label edge overflow, replay scrubbing); pushing checkpoints to GitHub.
+5. Optional: 8I.2 UX follow-ups (responsiveness < 1400 px, replay scrubbing); pushing checkpoints to GitHub. (~~camera `seed: null` entropy mode~~ and ~~box-label edge overflow~~ — both done in Phase 8K.)
 
 ---
 

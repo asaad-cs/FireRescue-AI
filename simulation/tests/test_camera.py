@@ -271,5 +271,151 @@ class TestZoneImageProvider(unittest.TestCase):
         self.assertIsNone(provider.image_for_zone("0_0_1"))
 
 
+class TestMissionScopedPool(unittest.TestCase):
+    """Phase 8K — no image repeats within a mission until exhaustion."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        self.names = ("a.png", "b.png", "c.png", "d.png")
+        for value, name in enumerate(self.names, start=1):
+            # Distinct pixel values so decoded images are comparable.
+            write_png(self.root / "safe" / name, value=value * 40)
+
+    def test_no_repeats_until_category_exhausted(self):
+        provider = make_provider(self.root)
+        first_cycle = [provider.select_path("safe").name for _ in range(4)]
+        self.assertEqual(sorted(first_cycle), sorted(self.names))
+
+    def test_pool_recycles_after_exhaustion(self):
+        provider = make_provider(self.root)
+        draws = [provider.select_path("safe").name for _ in range(12)]
+        # Three full cycles, each a permutation of all four images.
+        for cycle in (draws[0:4], draws[4:8], draws[8:12]):
+            self.assertEqual(sorted(cycle), sorted(self.names))
+
+    def test_fallback_shares_pool_with_direct_folder(self):
+        # "safe_person" has no folder and falls back to... its head
+        # "safe": both must drain the same pool.
+        provider = make_provider(self.root)
+        draws = {
+            provider.select_path("safe_person").name,
+            provider.select_path("safe").name,
+            provider.select_path("safe_person").name,
+            provider.select_path("safe").name,
+        }
+        self.assertEqual(draws, set(self.names))
+
+    def test_zone_keeps_its_assigned_image(self):
+        provider = make_provider(self.root)
+        first = provider.image_for_zone("0_0_1")
+        again = provider.image_for_zone("0_0_1")
+        self.assertTrue((first == again).all())
+        # The revisit must not have drained the pool: the three other
+        # images are still served before any repeat.
+        remaining = {provider.select_path("safe").name for _ in range(3)}
+        assigned = set(self.names) - remaining
+        self.assertEqual(len(assigned), 1)
+
+    def test_fresh_provider_is_a_fresh_mission_pool(self):
+        # A new provider (= a new mission) starts with a full pool even
+        # after the previous mission exhausted its category.
+        p1 = make_provider(self.root)
+        for _ in range(4):
+            p1.select_path("safe")
+        p2 = make_provider(self.root)
+        cycle = [p2.select_path("safe").name for _ in range(4)]
+        self.assertEqual(sorted(cycle), sorted(self.names))
+
+
+class TestRecycleBoundaryGuard(unittest.TestCase):
+    """Phase Demo.4 — recycling never immediately repeats the image that
+    just closed the previous cycle."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_two_image_pool_never_repeats_across_a_recycle_boundary(self):
+        for value, name in enumerate(("a.png", "b.png"), start=1):
+            write_png(self.root / "safe" / name, value=value * 60)
+        provider = make_provider(self.root)
+        draws = [provider.select_path("safe").name for _ in range(40)]
+        for i in range(1, len(draws)):
+            self.assertNotEqual(
+                draws[i], draws[i - 1],
+                f"draw {i} repeated the previous draw: {draws}"
+            )
+
+    def test_four_image_pool_never_repeats_across_a_recycle_boundary(self):
+        for value, name in enumerate(("a.png", "b.png", "c.png", "d.png"), start=1):
+            write_png(self.root / "safe" / name, value=value * 40)
+        provider = make_provider(self.root)
+        draws = [provider.select_path("safe").name for _ in range(60)]
+        for i in range(1, len(draws)):
+            self.assertNotEqual(draws[i], draws[i - 1])
+        # Still a true no-repeat-within-cycle guarantee for every full cycle.
+        for start in range(0, 60, 4):
+            cycle = draws[start:start + 4]
+            self.assertEqual(sorted(set(cycle)), sorted(cycle))
+
+    def test_single_image_category_is_unaffected(self):
+        # With only one image, there is nothing to exclude -- every draw,
+        # including across every recycle, must return that same image.
+        write_png(self.root / "safe" / "only.png")
+        provider = make_provider(self.root)
+        draws = [provider.select_path("safe").name for _ in range(10)]
+        self.assertEqual(set(draws), {"only.png"})
+
+    def test_within_cycle_no_repeat_guarantee_is_unchanged(self):
+        # Existing Phase 8K guarantee must still hold verbatim.
+        names = ("a.png", "b.png", "c.png")
+        for value, name in enumerate(names, start=1):
+            write_png(self.root / "safe" / name, value=value * 60)
+        provider = make_provider(self.root)
+        first_cycle = [provider.select_path("safe").name for _ in range(3)]
+        self.assertEqual(sorted(first_cycle), sorted(names))
+
+
+class TestSelectionModes(unittest.TestCase):
+    """Phase 8K — deterministic vs normal random selection modes."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        for name in ("a.png", "b.png", "c.png", "d.png"):
+            write_png(self.root / "safe" / name)
+
+    def test_seed_null_parses_to_none(self):
+        path = self.root / "cfg.yaml"
+        path.write_text("image_root: x\nseed: null\n", encoding="utf-8")
+        self.assertIsNone(load_camera_config(path).seed)
+
+    def test_seed_default_remains_42(self):
+        path = self.root / "cfg.yaml"
+        path.write_text("image_root: x\n", encoding="utf-8")
+        self.assertEqual(load_camera_config(path).seed, 42)
+
+    def test_integer_seed_reports_itself_as_effective(self):
+        provider = make_provider(self.root, make_config(seed=7))
+        self.assertEqual(provider.effective_seed, 7)
+
+    def test_random_mode_draws_distinct_entropy_seeds(self):
+        p1 = make_provider(self.root, make_config(seed=None))
+        p2 = make_provider(self.root, make_config(seed=None))
+        # 63-bit entropy: a collision here is ~1e-19.
+        self.assertNotEqual(p1.effective_seed, p2.effective_seed)
+
+    def test_random_mode_is_reproducible_from_effective_seed(self):
+        p1 = make_provider(self.root, make_config(seed=None))
+        seq1 = [p1.select_path("safe").name for _ in range(8)]
+        p2 = make_provider(self.root, make_config(seed=p1.effective_seed))
+        seq2 = [p2.select_path("safe").name for _ in range(8)]
+        self.assertEqual(seq1, seq2)
+
+
 if __name__ == "__main__":
     unittest.main()

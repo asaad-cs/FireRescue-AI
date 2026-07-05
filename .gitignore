@@ -108,6 +108,12 @@ ai/*/models/checkpoints/*
 ai/*/models/exports/*
 ai/*/models/predictions/
 yolov8*.pt
+yolo11*.pt
+yolo26*.pt
+
+# ─── Stray Ultralytics CLI output (not part of the documented
+#     pipeline — evaluate.py/train.py never write here) ──────
+/runs/
 !ai/*/datasets/raw/.gitkeep
 !ai/*/datasets/processed/.gitkeep
 !ai/*/datasets/external/.gitkeep

@@ -13,12 +13,22 @@ image_root: simulation/camera/images
 # Accepted image file extensions.
 extensions: [".jpg", ".jpeg", ".png"]
 
-# Image selection: with randomize true, each zone visit draws a random
-# image from its category using 'seed' (deterministic across runs for
-# the same seed and visit order). With randomize false, the first
-# image (sorted by name) is always used.
+# Image selection modes (Phase 8K):
+#   randomize: false            → fixed: always the first image (sorted
+#                                 by name). Strict test mode.
+#   randomize: true, seed: 42   → deterministic mission: seeded random
+#                                 selection, reproducible across runs.
+#   randomize: true, seed: null → normal random mode (default): a fresh
+#                                 entropy seed is drawn per mission and
+#                                 logged at startup, so consecutive
+#                                 missions see different imagery while
+#                                 any single mission can be reproduced
+#                                 from its logged seed.
+# In both randomized modes an image already shown this mission is not
+# reused until every image in its category has been used (the pool
+# then recycles), and a zone keeps its assigned image on revisits.
 randomize: true
-seed: 42
+seed: null
 
 # Decoded-image LRU cache (number of images kept in memory).
 cache_size: 64

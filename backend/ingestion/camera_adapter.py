@@ -122,13 +122,26 @@ def make_data_source(
     image_root = Path(config.image_root)
     if not image_root.is_absolute():
         image_root = _PROJECT_ROOT / image_root
+    if settings.camera_demo_mode:
+        # Integration layer only: swap which folder the SAME provider
+        # reads from. Category resolution and selection logic are
+        # untouched — this is a loading-path substitution, nothing else.
+        image_root = _PROJECT_ROOT / "assets" / "demo_dataset"
     provider = ZoneImageProvider(
         config=config, resolver=resolver, image_root=image_root
     )
+    if not config.randomize:
+        mode = "fixed"
+    elif config.seed is not None:
+        mode = "deterministic"
+    else:
+        mode = "random"
     logger.info(
-        "Camera | enabled | root=%s randomize=%s seed=%d",
+        "Camera | enabled | root=%s mode=%s source=%s effective_seed=%d "
+        "(no image repeats within a mission)",
         image_root,
-        config.randomize,
-        config.seed,
+        mode,
+        "DEMO" if settings.camera_demo_mode else "production",
+        provider.effective_seed,
     )
     return CameraSimAdapter(source=adapter, provider=provider)

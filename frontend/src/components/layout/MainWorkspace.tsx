@@ -16,6 +16,7 @@ import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 export function MainWorkspace() {
   const missionState = useMissionStore((s) => s.missionState);
   const wsStatus     = useMissionStore((s) => s.wsStatus);
+  const isReplaying  = useMissionStore((s) => s.isReplaying);
 
   const isStale = wsStatus !== 'connected' && missionState !== null;
   const vision = missionState?.vision ?? null;
@@ -28,7 +29,13 @@ export function MainWorkspace() {
       {/* Camera column — the primary visual element */}
       <div className="flex min-w-0 flex-[5] flex-col gap-2">
         <div className="min-h-0 flex-1">
-          <MissionCamera vision={vision} />
+          <MissionCamera
+            vision={vision}
+            missionId={missionState?.mission_id ?? null}
+            wsStatus={wsStatus}
+            isStale={isStale}
+            isReplaying={isReplaying}
+          />
         </div>
         <div className="h-[4.5rem] shrink-0">
           <DetectionCards vision={vision} />

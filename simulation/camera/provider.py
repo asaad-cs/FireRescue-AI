@@ -40,12 +40,25 @@ class CameraConfigError(ValueError):
 
 @dataclass(frozen=True)
 class CameraConfig:
-    """Parsed simulation_camera.yaml."""
+    """Parsed simulation_camera.yaml.
+
+    Selection modes (Phase 8K):
+      randomize=False        → fixed: always the first image (sorted by
+                               name) of a category. Strict test mode.
+      randomize=True, seed=N → deterministic mission: seeded random
+                               selection, reproducible across runs.
+      randomize=True, seed=None ("seed: null" in YAML)
+                             → normal random mode: a fresh entropy seed
+                               is drawn per provider (i.e. per mission)
+                               and logged, so consecutive missions see
+                               different imagery yet any single mission
+                               can be reproduced from its logged seed.
+    """
 
     image_root: str
     extensions: Tuple[str, ...] = _DEFAULT_EXTENSIONS
     randomize: bool = True
-    seed: int = 42
+    seed: Optional[int] = 42
     cache_size: int = 64
     default_category: str = "safe"
     hazard_categories: Dict[str, str] = field(default_factory=dict)
@@ -80,13 +93,15 @@ def load_camera_config(path: Path) -> CameraConfig:
         raise CameraConfigError(f"camera config is not a YAML mapping: {path}")
 
     video = data.get("video") or {}
+    raw_seed = data.get("seed", 42)
     config = CameraConfig(
         image_root=str(_require(data, "image_root", path)),
         extensions=tuple(
             str(e).lower() for e in data.get("extensions", _DEFAULT_EXTENSIONS)
         ),
         randomize=bool(data.get("randomize", True)),
-        seed=int(data.get("seed", 42)),
+        # "seed: null" selects normal random mode (fresh entropy per mission).
+        seed=None if raw_seed is None else int(raw_seed),
         cache_size=int(data.get("cache_size", 64)),
         default_category=str(data.get("default_category", "safe")),
         hazard_categories={
@@ -164,10 +179,23 @@ class ZoneCategoryResolver:
 class ZoneImageProvider:
     """Serves one RGB image (BGR uint8 numpy array) per zone visit.
 
-    Selection is deterministic for a fixed seed and visit order:
-    every call draws from one seeded RNG, and the simulation visits
-    zones in a deterministic BFS order, so a mission's imagery is
-    reproducible end to end. With randomize disabled, the first image
+    One provider lives exactly one mission (make_data_source builds a
+    fresh one per mission), so all per-instance state below is
+    mission-scoped by construction.
+
+    Mission-scoped no-repeat pool (Phase 8K): with randomize enabled,
+    an image already served this mission is not chosen again until
+    every image of that category folder has been used; only then does
+    the pool recycle. Zones are also sticky — a zone keeps the image
+    it was first assigned, so revisits show the same room. Recycling
+    (Phase Demo.4) also excludes the image that just closed the
+    previous cycle, so it cannot immediately reopen the next one too.
+
+    Reproducibility: with an integer seed the whole mission's imagery
+    is deterministic (one seeded RNG + deterministic BFS visit order).
+    With seed None (normal random mode) a fresh entropy seed is drawn
+    and exposed as effective_seed so the mission can still be
+    reproduced from the logs. With randomize disabled, the first image
     (sorted by name) of a category is always served.
     """
 
@@ -187,10 +215,27 @@ class ZoneImageProvider:
         self._config = config
         self._resolver = resolver
         self._image_root = image_root
-        self._rng = random.Random(config.seed)
+        self._effective_seed = (
+            config.seed
+            if config.seed is not None
+            else random.SystemRandom().randrange(2**63)
+        )
+        self._rng = random.Random(self._effective_seed)
         self._listings: Dict[str, List[Path]] = {}
+        self._used: Dict[str, set] = {}
+        self._last_shown: Dict[str, Path] = {}
+        self._zone_assignments: Dict[str, Optional[Path]] = {}
         self._cache: "OrderedDict[str, Any]" = OrderedDict()
         self._warned: set = set()
+
+    @property
+    def effective_seed(self) -> int:
+        """The seed actually driving selection this mission.
+
+        Equals config.seed when one was given; otherwise the entropy
+        seed drawn for normal random mode (log it to reproduce a run).
+        """
+        return self._effective_seed
 
     # ------------------------------------------------------------------
     # Public API
@@ -199,6 +244,10 @@ class ZoneImageProvider:
     def image_for_zone(self, zone_id: str) -> Optional[Any]:
         """Pick and decode an image for a zone.
 
+        A zone keeps the image it was assigned on first visit for the
+        rest of the mission (rooms do not change appearance between
+        visits, and repeat frames do not drain the no-repeat pool).
+
         Args:
             zone_id: Zone identifier ("<x>_<y>_<floor>").
 
@@ -206,8 +255,12 @@ class ZoneImageProvider:
             HxWx3 uint8 BGR numpy array, or None when no usable image
             exists for the zone's category or any of its fallbacks.
         """
-        category = self._resolver.category_for(zone_id)
-        path = self.select_path(category)
+        if zone_id in self._zone_assignments:
+            path = self._zone_assignments[zone_id]
+        else:
+            category = self._resolver.category_for(zone_id)
+            path = self.select_path(category)
+            self._zone_assignments[zone_id] = path
         if path is None:
             return None
         return self._load(path)
@@ -218,6 +271,10 @@ class ZoneImageProvider:
         Fallback chain for e.g. "fire_smoke_person":
         the category itself → without the victim suffix ("fire_smoke")
         → its first component ("fire") → the default category.
+
+        With randomize enabled, selection draws from the mission's
+        no-repeat pool: images already served are excluded until the
+        candidate folder is exhausted, at which point the pool recycles.
 
         Args:
             category: Requested image category.
@@ -235,7 +292,7 @@ class ZoneImageProvider:
                     )
                 if not self._config.randomize:
                     return files[0]
-                return self._rng.choice(files)
+                return self._pick_unused(candidate, files)
         self._warn_once(
             f"no images available for category '{category}' "
             f"(searched {list(self._candidates(category))} under "
@@ -246,6 +303,39 @@ class ZoneImageProvider:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _pick_unused(self, folder: str, files: List[Path]) -> Path:
+        """Random choice honoring the mission-scoped no-repeat pool.
+
+        Pools are keyed by the folder actually served, so a category
+        reached via fallback (fire_person → fire) shares its pool with
+        direct requests for that folder.
+
+        Recycle-boundary guard: when a pool exhausts and recycles, the
+        image that just closed the previous cycle is excluded from the
+        reopened pool (when more than one image exists), so it cannot
+        become the first pick of the new cycle too. With exactly one
+        image, there is nothing to exclude — that image is always
+        returned, unchanged from before.
+        """
+        used = self._used.setdefault(folder, set())
+        unused = [f for f in files if f not in used]
+        if not unused:
+            logger.info(
+                "ZoneImageProvider | category '%s' exhausted its %d "
+                "image(s) this mission — recycling pool",
+                folder,
+                len(files),
+            )
+            used.clear()
+            unused = files
+            last = self._last_shown.get(folder)
+            if last is not None and len(files) > 1:
+                unused = [f for f in files if f != last]
+        choice = self._rng.choice(unused)
+        used.add(choice)
+        self._last_shown[folder] = choice
+        return choice
 
     def _candidates(self, category: str) -> List[str]:
         candidates = [category]
