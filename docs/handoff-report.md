@@ -1,7 +1,50 @@
 # FireRescue AI — Handoff Report
 
-**Date:** 2026-07-05 (§0 — Version 2 session handoff, extended) / 2026-07-01 (§1+ — MVP v1.0 handoff, preserved unchanged)  
-**Status:** Fully operational, in both Production Mode and the new Demo Mode. All tests pass (623 BE + 50 subtests, 334 FE, tsc 0). Phases through 8J committed (`v2.0-phase-8j`, local only); **everything from Phase 8K through Phase AI.1 is complete, fully verified, and entirely uncommitted.**
+**Date:** 2026-07-05 (§FREEZE — project freeze + GitHub migration, current) / 2026-07-05 (§0 — Version 2 session handoff, preserved) / 2026-07-01 (§1+ — MVP v1.0 handoff, preserved unchanged)
+**Status:** Fully operational, in both Production Mode and Demo Mode. All tests pass (623 BE + 50 subtests, 334 FE, tsc 0). **The repository is frozen: everything through Phase AI.1 is committed at `0861ff0` on `main` and pushed to `origin/main`, along with all four previously local-only V2 checkpoint tags.**
+
+---
+
+## §FREEZE — Project Freeze & GitHub Migration (2026-07-05)
+
+This section documents a **documentation-and-checkpoint session only**. No features were added, no model was retrained, no dataset was modified, no architecture changed, and no runtime behavior changed. The only code-adjacent change was two narrowly-scoped `.gitignore` entries (see below). Everything else was: verify → commit → push → document.
+
+### What was verified before committing
+
+- All work described in §0 below (Phases 8K through AI.1) was confirmed present on disk and matching its documentation: file counts for `assets/demo_dataset/` (fire 41, smoke 30, fire_smoke 39, person 45, safe 46 — ≈201 images, close to but not exactly the previously-cited 202, within normal narrative-vs-actual drift) and `assets/simulation_dataset/_curation/` (approved 14, manual_review 165, rejected 55 — exact match), the `camera_demo_mode` settings field and its conditional in `camera_adapter.py`, the `ZoneImageProvider` recycle-boundary fix in `provider.py`, and the `MissionCamera` live-monitor redesign in the frontend.
+- Full backend suite: **623 passed + 50 subtests**. Full frontend suite: **334 passed**. TypeScript: **0 errors**. All run immediately before committing.
+- Two stray, undocumented generated artifacts were found and excluded from the commit (not part of any phase above): a `runs/` directory at the repo root (Ultralytics validation output — PR curves, confusion matrices — that no documented script writes to) and `yolo26n.pt` (an auto-downloaded weight for a YOLO26 architecture never used by this project, which trains `yolov8n`). Both were left on disk, untouched, and excluded via new `.gitignore` entries (`/runs/`, `yolo26*.pt`) so they can't be accidentally staged later.
+
+### What was committed and pushed
+
+| Item | Value |
+|---|---|
+| Commit hash | `0861ff0` |
+| Commit message | `Checkpoint: Demo-ready architecture + AI v2 baseline` |
+| Files changed | 451 (437 additions, 14 modifications) |
+| Branch | `main`, pushed to `origin/main` (`https://github.com/asaad-cs/FireRescue-AI`) |
+| Push result | `c5edef9..0861ff0 main -> main` — success |
+| Tags pushed | `v2.0-phase-8c`, `v2.0-phase-8f`, `v2.0-phase-8i1`, `v2.0-phase-8j` (previously local-only) |
+
+### Post-push verification
+
+- `git status` → clean
+- `git rev-parse main` == `git rev-parse origin/main` (identical SHA)
+- `main` tracks `origin/main` with zero ahead/behind
+- `git branch -r --contains 0861ff0` confirms the commit is present on the remote
+- `git ls-files` confirms no `datasets/{raw,processed,merged,external}/` or `models/{checkpoints,exports}/` content was committed (only `.gitkeep` placeholders, as intended) and confirms all load-bearing config/entry-point files are tracked
+
+### Reproducibility caveat (reported, not fixed)
+
+**Trained model weights are not in GitHub.** `ai/object_detection/models/{checkpoints,exports}/` have been gitignored since Phase 8B (a pre-existing convention, not changed this session) — cloning the repo alone gives you the full codebase, both image libraries (production + demo, both tracked), and the dataset-pipeline reports, but not a `.onnx`/`.pt` file to run the `yolo` detector. A new machine must either retrain from scratch (see `docs/session-context.md` → "Setup Guide") or receive the model file out-of-band. Committing large binary model files would be a real workflow/architecture decision outside this task's scope ("documentation updates only") — this is reported here per the task's explicit instruction to report rather than implement anything found missing.
+
+### Remaining TODOs
+
+See `docs/session-context.md` → "Migration Report" for the complete list (indoor-dataset curation Phases 1–5, the two mislabeled Safe images, the flagged kitchen-fire special case, 165 unadjudicated Manual Review images, D-Fire merge decision, default-detector-flip decision, npm audit Vite upgrade decision, the pre-existing restart-adapter bug). None were started or implemented this session.
+
+### Confirmation
+
+A new machine can `git clone https://github.com/asaad-cs/FireRescue-AI`, check out `main` at `0861ff0`, follow the Setup Guide in `docs/session-context.md`, and run the full simulation + backend + frontend + Demo Mode experience immediately — every required asset for that is tracked in git. The one gap is the trained YOLO model file itself (see caveat above).
 
 ---
 
@@ -50,7 +93,7 @@ tests (backend suite now 609 + 50 subtests). Phase 8D metrics (mAP50
 system was launch-verified end-to-end after the fix (YOLO detector,
 camera, live vision, WebSocket).
 
-### Phase 8K — Camera experience + live camera monitor (2026-07-04, UNCOMMITTED)
+### Phase 8K — Camera experience + live camera monitor (2026-07-04, committed 2026-07-05 in `0861ff0` — see §FREEZE)
 
 Implemented and fully verified the camera/UX phase (report:
 `docs/phase-8k-report.md`): mission-scoped no-repeat image pool with
@@ -70,10 +113,9 @@ REPLAY badge + frozen history during replay, HUD bands that structurally
 prevent HUD/label overlap — all frontend-only) and discovered a
 pre-existing backend issue (restart path doesn't stop the old adapter —
 deliberately NOT fixed, see report §7).
-**Awaiting user approval for the checkpoint commit (suggested tag
-`v2.0-phase-8k`).**
+~~Awaiting user approval for the checkpoint commit~~ — **done 2026-07-05**: committed as part of the single bundled checkpoint `0861ff0` (see §FREEZE), not under a separate `v2.0-phase-8k` tag.
 
-### Phase 9A/9B/10 — Simulation Library gap analysis + partial curation (2026-07-04/05, UNCOMMITTED)
+### Phase 9A/9B/10 — Simulation Library gap analysis + partial curation (2026-07-04/05, committed 2026-07-05 in `0861ff0` — see §FREEZE)
 
 Full detail: `ai/object_detection/datasets/reports/phase9b_promotion_manifest_2026-07-05.md`.
 
@@ -110,7 +152,7 @@ keep the runtime pipeline provably untouched).
 `ZoneCategoryResolver` remains hazard-category only — the simulator is not
 scene-aware today, and this pass did not change that.
 
-### Phases 10A.2 → AI.1 — Architecture Finalization, Demo System, Model Retrain (2026-07-05, ALL UNCOMMITTED)
+### Phases 10A.2 → AI.1 — Architecture Finalization, Demo System, Model Retrain (2026-07-05, committed 2026-07-05 in `0861ff0` — see §FREEZE)
 
 Full detail in `docs/session-context.md` (authoritative — every phase below has its
 own dated subsection there). Summary in chronological order:
@@ -171,8 +213,8 @@ own dated subsection there). Summary in chronological order:
 1. ~~Checkpoint commit of 8G/8H/8I.1~~ — **done 2026-07-03**: commit `fe9fc19`, tag `v2.0-phase-8i1`, tests re-verified green immediately before committing; `assets/simulation_dataset/` images tracked per user decision.
 2. ~~CUDA torch install~~ — **done 2026-07-03** (env-only, zero project edits): torch 2.12.1+cu130, `torch.cuda.is_available()` True, verified incl. YOLODetector ONNX inference; ai+yolo tests 270 passed.
 3. **Dataset audit done 2026-07-03** — see `ai/object_detection/datasets/reports/dataset_audit_2026-07-03.md`. Key: near-duplicate split leakage (16.9% val / 15.6% test contaminated; metrics inflated), zero fire+person co-occurrence, 2 negatives. ~~Fix cluster-aware split~~ — **done 2026-07-04 (Phase 8J, see above)**; merge D-Fire BEFORE the 50-epoch run.
-4. Then: manual D-Fire download + pipeline re-run + 50-epoch training (GPU, ~1–2 min/epoch) **on the new scene-aware split**; threshold calibration; possibly flip default detector to `yolo`.
-5. Optional: 8I.2 UX follow-ups (responsiveness < 1400 px, replay scrubbing); pushing checkpoints to GitHub. (~~camera `seed: null` entropy mode~~ and ~~box-label edge overflow~~ — both done in Phase 8K.)
+4. ~~Manual D-Fire download + pipeline re-run + 50-epoch training~~ — **superseded 2026-07-05 by Phase AI.1**: a 60-epoch GPU retrain happened on the scene-aware split without D-Fire (D-Fire was explicitly analyzed and deferred — it doesn't close the indoor-imagery gap that turned out to be the real bottleneck). Threshold calibration and the default-detector flip remain open, low-priority decisions.
+5. ~~Optional: 8I.2 UX follow-ups; pushing checkpoints to GitHub~~ — **checkpoints pushed 2026-07-05** (commit `0861ff0`, see §FREEZE at the top of this file); 8I.2 UX follow-ups (responsiveness < 1400px, replay scrubbing) remain open and low-priority. **The actual next priority is NOT further training** — see `docs/session-context.md` → "Next Priority" for the required 5-phase indoor-building dataset curation plan.
 
 ---
 

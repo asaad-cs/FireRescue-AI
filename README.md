@@ -1,8 +1,10 @@
 # FireRescue AI
 
-A simulation-first research prototype that provides real-time situational awareness for firefighters operating inside dangerous buildings. A virtual drone explores a building autonomously, sensors detect hazards and victim signals, and an operator monitors a live tactical dashboard.
+A simulation-first research prototype that provides real-time situational awareness for firefighters operating inside dangerous buildings. A virtual drone explores a building autonomously, sensors detect hazards and victim signals, an onboard AI model detects fire/smoke/people in real photographs fed through a simulated camera, and an operator monitors a live tactical dashboard.
 
-**Version: 1.0.0 — MVP complete. All phases locked.**
+**Version: 2.0 (checkpoint) — MVP v1.0.0 frozen + a complete AI vision pipeline on top. Status: Demo Ready with Minor Issues.**
+
+> **New to this repo? Start with [`docs/session-context.md`](docs/session-context.md).** It is written for a reader (human or AI agent) with zero prior context and is kept authoritative — architecture, current state, the latest model's metrics, every known issue, the exact next priority, a full setup guide, and instructions for anyone (agent or developer) continuing this work.
 
 ---
 
@@ -32,25 +34,39 @@ This is a personal research and engineering project. It is not a commercial prod
 │  Broadcaster ──┐                                                       │
 │  Recorder ─────┤← MissionManager ← Pipeline ← PerceptionEngine       │
 │                │        ↑                                              │
-│                │   SimAdapter → SimulationRunner (active scenario)     │
+│                │   SimAdapter/CameraSimAdapter → SimulationRunner      │
 └────────────────┘───────────────────────────────────────────────────────┘
 ```
 
-### Data flow — one simulation tick
+### Runtime flow — one simulation tick
 
-1. `SimulationRunner` moves the drone to the next zone, generates a `Frame` (pose + sensor channels)
-2. `SimAdapter` delivers the `Frame` to `MissionManager.on_frame()`
-3. `MissionManager` sends the `Frame` through the `Pipeline`: Validate → Enrich → `PerceptionEngine`
-4. `PerceptionEngine` returns a `PerceptionResult` (hazard level, victim probability, any new alerts)
-5. `MissionManager` merges the result into `MissionState` and notifies all registered listeners
-6. `Broadcaster` fans the full `MissionState` as JSON to all connected WebSocket clients
-7. `Recorder` stores a deep copy of the `MissionState` for later replay
-8. The frontend `useWebSocket` hook receives the message, calls `setMissionState()` in Zustand
-9. React components re-render with the updated state
+1. `SimulationRunner` moves the drone to the next zone, generates a `Frame` (pose + sensor channels), and — if the simulated camera is enabled — a real photograph is attached to `frame.channels["rgb"]` based on the zone's hazard category.
+2. The active `DataSource` delivers the `Frame` to `MissionManager.on_frame()`.
+3. `MissionManager` sends the `Frame` through the `Pipeline`: Validate → Enrich → `PerceptionEngine`.
+4. `PerceptionEngine` runs whichever detector is configured (`ground_truth` or `yolo`) and returns a `PerceptionResult` (hazard level, victim probability, alerts, and — for `yolo` — an annotated-image vision payload).
+5. `MissionManager` merges the result into `MissionState` and notifies all registered listeners.
+6. `Broadcaster` fans the full `MissionState` as JSON to all connected WebSocket clients; `Recorder` stores a copy for replay.
+7. The frontend receives the message, updates its Zustand store, and re-renders — including the live camera view if a vision payload is present.
 
 ### The one architectural invariant
 
-**The frontend only ever receives `MissionState`.** It has no knowledge of `Frame`, `PerceptionResult`, `ZoneHistory`, or any internal backend type. All derived values — alert counts, explored percentage, victim signal count — are computed server-side and included in `MissionState`.
+**The frontend only ever receives `MissionState`.** It has no knowledge of `Frame`, `PerceptionResult`, `ZoneHistory`, or any internal backend type. All derived values are computed server-side and included in `MissionState`.
+
+---
+
+## AI pipeline
+
+`ai/object_detection/` is an isolated workspace (nothing in it is imported by the MVP runtime) implementing an Ultralytics YOLO detector — classes `fire` / `smoke` / `person` — trained via `python -m ai.object_detection.training.train` and exported to ONNX for serving via `perception/detectors/yolo.py` (onnxruntime, never raises, degrades gracefully). Switching between the deterministic `ground_truth` detector (the committed default) and the trained `yolo` detector is a single config value: `settings.perception_detector`.
+
+**Current model:** `firerescue-detector-20260705-064246` (YOLOv8n, 60 GPU epochs) — **mAP50 0.601 / mAP50-95 0.334**, up from a corrected baseline of mAP50 0.3997. See `docs/session-context.md` → "Latest Model" for the full metrics table, and → "Known Issues" for confirmed limitations (animal→person false positives, two mislabeled training negatives, near-absence of indoor-building imagery).
+
+## Dataset architecture
+
+The image library uses **Architecture A (Category → Scene)** — e.g. `fire/warehouse/`, `smoke/office/` — the sole, finally-decided filesystem standard for this project. Two separate libraries exist:
+- `assets/simulation_dataset/` — the production master library (tracked in git), with a `_curation/` staging subtree for images under review.
+- `assets/demo_dataset/` — an isolated, hand-curated set built specifically for reliable live demos, toggled on with one settings flag (`camera_demo_mode`).
+
+The YOLO training dataset itself (12,545 images, scene-aware split to prevent train/val/test leakage) lives under `ai/object_detection/datasets/` and is gitignored — regenerate it with the `data_tools` pipeline (see Setup below).
 
 ---
 
@@ -60,73 +76,17 @@ This is a personal research and engineering project. It is not a commercial prod
 FireRescue-AI/
 │
 ├── backend/                         FastAPI application
-│   ├── main.py                      App entry point, lifespan, WebSocket endpoint
-│   ├── api/routes.py                REST endpoints (mission control, scenarios, replay)
-│   ├── config/settings.py           All tuneable values (tick rate, ports, etc.)
-│   ├── mission/
-│   │   ├── manager.py               Mission state machine, Frame processing
-│   │   └── recorder.py              Records every MissionState snapshot for replay
-│   ├── models/
-│   │   ├── mission_state.py         MissionState + sub-models + enums (Pydantic)
-│   │   ├── alert.py                 Alert model
-│   │   └── frame.py                 Frame model (internal; never sent to frontend)
-│   ├── pipeline/
-│   │   ├── pipeline.py              Orchestrates: Validator → Enricher → PerceptionEngine
-│   │   ├── validator.py             Frame schema + mission context validation
-│   │   └── enricher.py              Resolves drone pose (x, y, floor) → zone_id + label
-│   ├── ingestion/
-│   │   ├── interface.py             DataSource protocol — the hardware independence boundary
-│   │   └── sim_adapter.py           Adapts SimulationRunner to the DataSource interface
-│   ├── websocket/broadcaster.py     Fans MissionState JSON to all WebSocket clients
-│   ├── utils/logger.py              Structured logger
-│   └── tests/                       141 tests + 20 subtests (pytest)
-│
-├── simulation/                      Simulation engine
-│   ├── environment.py               Building, Floor, Zone models
-│   ├── drone.py                     BFS zone exploration logic
-│   ├── sensors.py                   Environmental channel generation (temp, CO, smoke)
-│   ├── scenarios.py                 Five named scenario factory functions
-│   ├── scenario_registry.py         Registry of all available scenarios + metadata
-│   ├── runner.py                    Async tick loop (one-shot, new instance per mission)
-│   └── tests/                       84 tests + 30 subtests (included in the 286 total)
-│
-├── perception/                      Perception framework
-│   ├── engine.py                    Orchestrator: process(Frame, ZoneHistory) → PerceptionResult
-│   ├── hazard.py                    HazardLevel classifier (NONE/LOW/MODERATE/HIGH/CRITICAL)
-│   ├── victim.py                    Victim signal probability estimator
-│   ├── alerts.py                    Alert generator with deduplication
-│   ├── types.py                     ZoneHistory type
-│   ├── base/detector.py             BaseDetector abstract class
-│   ├── results/detection.py         PerceptionResult type
-│   ├── registry/registry.py         Detector registry (name → detector instance)
-│   ├── detectors/ground_truth.py    Reads static hazard/victim maps from the active scenario
-│   └── tests/                       61 tests (included in the 286 total)
-│
-├── frontend/                        Operator dashboard
-│   ├── src/
-│   │   ├── types/mission.ts         TypeScript interfaces mirroring backend Pydantic models
-│   │   ├── stores/missionStore.ts   Zustand store (connection + mission + ui + replay slices)
-│   │   ├── services/
-│   │   │   ├── websocket.ts         WebSocket service with auto-reconnect
-│   │   │   └── api.ts               REST client (mission control calls)
-│   │   ├── hooks/
-│   │   │   ├── useWebSocket.ts      WebSocket lifecycle hook
-│   │   │   └── useReplayEngine.ts   Interval-driven replay tick engine
-│   │   ├── utils/format.ts          Display helpers (elapsed, percentage, truncation)
-│   │   ├── components/
-│   │   │   ├── layout/              AppLayout, TopNavigation, MainWorkspace,
-│   │   │   │                        RightSidebar, BottomTimeline
-│   │   │   ├── dashboard/           TacticalMap, AlertPanel, DroneStatus, VictimSignals,
-│   │   │   │                        MissionTimeline, ActivityFeed, MissionControls,
-│   │   │   │                        MissionStatistics, ReplayControls, ConnectionBanner
-│   │   │   └── placeholders/        ConnectionIndicator (in use); archived stubs
-│   │   └── pages/Dashboard.tsx      Single page — renders AppLayout
-│   └── package.json / vite.config.ts / tailwind.config.ts / tsconfig.json
-│
-├── docs/                            Architecture and operational documentation
-├── requirements.txt                 Python dependencies
+├── simulation/                      Simulation engine + simulated camera (simulation/camera/)
+├── perception/                      Detection framework (ground_truth + yolo detectors)
+├── frontend/                        Operator dashboard (React)
+├── ai/                              AI/ML workspace (object_detection module implemented; others are placeholders)
+├── assets/                          Image libraries (simulation_dataset = production, demo_dataset = demo)
+├── docs/                            Documentation — session-context.md is authoritative
+├── requirements.txt                 Backend Python dependencies
 └── README.md
 ```
+
+Full folder-by-folder breakdown: `docs/session-context.md` → "Folder structure".
 
 ---
 
@@ -138,6 +98,7 @@ FireRescue-AI/
 | Frontend | React + TypeScript + Vite | React 18, TS 5.5, Vite 5.4 |
 | Styling | Tailwind CSS | 3.4 |
 | State management | Zustand | 4.5 |
+| AI / object detection | Ultralytics YOLO + PyTorch + onnxruntime | YOLOv8n |
 | Backend tests | pytest | 8.x |
 | Frontend tests | Vitest + Testing Library | Vitest 2.x |
 | Data validation | Pydantic | v2 |
@@ -165,13 +126,13 @@ curl -X POST http://localhost:8000/mission/start
 
 ---
 
-## Installation
+## Setup
 
 **Prerequisites:** Python 3.12+, Node.js 18+
 
 ```bash
 # Clone and enter the project
-git clone <repo-url>
+git clone https://github.com/asaad-cs/FireRescue-AI.git
 cd FireRescue-AI
 
 # Backend dependencies
@@ -179,55 +140,48 @@ pip install -r requirements.txt
 
 # Frontend dependencies
 cd frontend && npm install && cd ..
+
+# Optional — only needed for YOLO training/inference
+pip install -r ai/requirements.txt
+
+# Rebuild the simulator's runtime image folder from the tracked master library
+python -m ai.object_detection.data_tools.export_simulation_library
 ```
 
----
+**Important:** trained model weights (`.onnx`/`.pt`) are gitignored and are **not** included in this repository. Running with `perception_detector = "yolo"` requires either retraining (see `docs/session-context.md` → "Setup Guide") or copying a model file in from elsewhere. The default detector, `ground_truth`, needs no model file at all.
 
-## Running the Backend
+### Running the Backend
 
 ```bash
-# From the project root
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --ws websockets
 ```
 
 The simulation starts automatically. The drone explores the Warehouse Alpha scenario (20 zones) in approximately 20 seconds at the default 1-second tick rate.
 
-**Configurable settings** (`backend/config/settings.py`):
+**Key configurable settings** (`backend/config/settings.py`):
 
 | Setting | Default | Description |
 |---|---|---|
 | `api_port` | `8000` | Backend HTTP port |
 | `sim_tick_interval_seconds` | `1.0` | Seconds between simulation ticks |
-| `max_zone_history` | `20` | Recent frames kept per zone for perception |
-| `perception_detector` | `"ground_truth"` | Active detector name |
+| `perception_detector` | `"ground_truth"` | Active detector — `"ground_truth"` or `"yolo"` |
+| `camera_demo_mode` | `False` | `True` switches the simulated camera to the curated demo image set |
 
----
-
-## Running the Frontend
+### Running the Frontend
 
 ```bash
-# From the frontend/ directory
-npm run dev
+cd frontend && npm run dev
 ```
 
-Open `http://localhost:5173` in a browser. The frontend proxies `/api/*` and `/ws` to `http://localhost:8000` automatically.
+Open `http://localhost:5173`. The frontend proxies `/api/*` and `/ws` to `http://localhost:8000` automatically.
 
----
-
-## Running Tests
+### Running Tests
 
 ```bash
-# Backend — from the project root
-python -m pytest
-
-# Frontend — from the frontend/ directory
-npx vitest run
-
-# TypeScript type check
+python -m pytest               # Backend: 623 tests + 50 subtests
+cd frontend && npx vitest run  # Frontend: 334 tests
 cd frontend && npx tsc --noEmit
 ```
-
-**Test counts:** 286 backend tests (+ 50 subtests) · 295 frontend tests
 
 ---
 
@@ -259,21 +213,19 @@ Push-only (server → client). Payload: full `MissionState` JSON on every state 
 4. Hazard colors appear on zones as the drone visits them (grey → amber → orange → red)
 5. **Alerts** appear in the right sidebar as the drone enters hazardous zones
 6. **Victim signals** populate as the drone detects survivor probability
-7. When the mission completes (all zones explored), click **NEW MISSION** to restart
-8. Or click **REPLAY** to step through the recorded mission at 0.5×, 1×, or 2× speed
-9. To try a different building, call `POST /scenarios/{key}/activate` then **NEW MISSION**
+7. The **live camera monitor** shows the real photograph the simulated camera selected for the current zone, with AI detection overlays if `perception_detector = "yolo"`
+8. When the mission completes (all zones explored), click **NEW MISSION** to restart
+9. Or click **REPLAY** to step through the recorded mission at 0.5×, 1×, or 2× speed
+10. To try a different building, call `POST /scenarios/{key}/activate` then **NEW MISSION**
+11. Set `camera_demo_mode = True` for a curated, non-repetitive, demo-safe image set (see `docs/session-context.md`)
 
 ---
 
-## Screenshots
+## Current State, Known Issues, and Next Priority
 
-> Add screenshots here after a live demo session.
+The model has converged on the current dataset — **more training is not the next step.** The confirmed bottleneck is the near-total absence of indoor-building imagery (kitchens, offices, hospitals, malls, schools, corridors, electrical/server rooms, basements, stairwells) in the training corpus, along with two mislabeled training negatives and an animal→person misclassification issue caused by zero animal images existing in the corpus.
 
-Suggested captures:
-- Dashboard at mission start (drone at first zone)
-- Dashboard mid-mission (several zones explored, alerts visible)
-- Dashboard at mission end (all zones explored, ENDED state)
-- Replay controls visible in the navigation bar
+Full detail — completed phases, production vs. demo vs. experimental components, the full metrics table, every confirmed known issue, and the exact 5-phase next-priority plan (curate indoor fire → indoor smoke → indoor victims → indoor safe negatives → hard negatives, THEN retrain) — is documented in **`docs/session-context.md`**. Do not retrain the model without reading that plan first.
 
 ---
 
@@ -281,32 +233,12 @@ Suggested captures:
 
 | Phase | Title | Status |
 |---|---|---|
-| 0 | Project Foundation | Complete |
-| 1 | Architecture & Design | Complete |
-| 2 | Simulation Engine | Complete |
-| 3 | Backend & Pipeline | Complete |
-| 4 | Full Integration | Complete |
-| 5 | Perception Framework | Complete |
-| 6A | Frontend Foundation | Complete |
-| 6B | Interactive Dashboard | Complete |
-| 7A | Visual Polish | Complete |
-| 7B | Multiple Scenarios | Complete |
-| 7C | Mission Replay | Complete |
-| — | MVP Documentation | Complete |
-
----
-
-## Future Work
-
-The system is architecture-ready for these extensions. None are planned.
-
-**Persistent storage** — Store missions, frames, and alerts in SQLite so history survives backend restarts. The schema is designed in `docs/database.md`.
-
-**Hardware adapter** — Replace `SimAdapter` with a real drone sensor adapter. Nothing upstream changes — the `DataSource` protocol in `backend/ingestion/interface.py` is the only seam.
-
-**Probabilistic detector** — Replace `GroundTruthDetector` with a detector that has configurable false-positive / false-negative rates to simulate real sensor uncertainty.
-
-**Dynamic fire spread** — Add fire propagation logic to `SimulationRunner` so hazard levels evolve during a mission rather than being fixed per zone.
+| 0–7C | MVP (simulation, backend, perception, dashboard, scenarios, replay) | Complete, frozen |
+| 8A–8K | AI workspace, YOLO training pipeline, simulated camera, live AI vision, EOC dashboard redesign, camera experience | Complete |
+| 9A–10B.1 | Dataset gap analysis, curation staging, Architecture A finalized as the sole dataset standard | Complete |
+| Demo.1–Demo.6 | Isolated demo dataset + Demo Mode + recycle-bug fix + Safe-category expansion | Complete |
+| AI.1 | GPU retrain (60 epochs) + full live validation — verdict "Demo Ready with Minor Issues" | Complete |
+| **Next** | **Curate a real indoor-building dataset (5 phases) before any further retraining** | **Not started** |
 
 ---
 

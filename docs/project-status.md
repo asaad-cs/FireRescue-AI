@@ -1,16 +1,18 @@
 # FireRescue AI — Project Status
 
-**Version:** 1.0.0 (MVP, frozen) + Version 2 in progress  
-**Date:** 2026-07-04 (MVP sections below reflect 2026-07-01)  
-**Current Phase:** Version 2 — Phase AI.1 complete (model retrained on GPU + fully live-validated; verdict "Demo Ready with Minor Issues"). Everything from Phase 8K onward is uncommitted, awaiting checkpoint approval.  
-**Overall Status:** Fully operational end to end, in both Production Mode and the new Demo Mode. 623 BE (+50 subtests) + 334 FE tests pass. 0 TypeScript errors.
+**Version:** 1.0.0 (MVP, frozen) + Version 2 checkpoint (frozen for handoff)
+**Date:** 2026-07-05 — repository frozen, checkpoint committed and pushed to GitHub (MVP sections below reflect 2026-07-01)
+**Current Phase:** **PROJECT FREEZE.** Phase AI.1 (GPU retrain + full live validation, verdict "Demo Ready with Minor Issues") is the last implementation phase. This session performed a documentation-and-checkpoint pass only — no features, model changes, or architecture changes. Everything through Phase AI.1 is now committed at `0861ff0` on `main` and pushed to `origin/main` (see `docs/handoff-report.md` for full migration verification).
+**Overall Status:** Fully operational end to end, in both Production Mode and Demo Mode. 623 BE (+50 subtests) + 334 FE tests pass. 0 TypeScript errors. **The next required step is a 5-phase indoor-building dataset curation effort — NOT retraining — see "Next Priority" below and `docs/session-context.md` for full detail.**
+
+For a complete zero-context project brief (architecture, folder structure, AI/simulation pipelines, full current-model metrics, every known issue, setup guide, and instructions for future agents), read **`docs/session-context.md`** — it is the authoritative document; this file tracks phase/status history.
 
 ---
 
-## 0. Version 2 Status (2026-07-04)
+## 0. Version 2 Status (2026-07-05, frozen)
 
 The MVP below remains frozen and fully accurate. On top of it, Version 2
-has delivered a complete AI vision loop:
+has delivered a complete AI vision loop, now checkpointed as a single commit:
 
 | Phase | Deliverable | State |
 |---|---|---|
@@ -23,23 +25,30 @@ has delivered a complete AI vision loop:
 | 8H | Permanent image library `assets/simulation_dataset/` + export tool | Committed (`v2.0-phase-8i1`) |
 | 8I.1 | EOC dashboard redesign — `MissionCamera` (video-ready), detection cards, ops panel | Committed (`v2.0-phase-8i1`) |
 | 8J | Scene-aware dataset split — Roboflow-variant leakage fixed, dataset regenerated (8,783/2,515/1,247), 0-leakage verified, residual dHash overlap halved (16.9→8.0% val, 15.6→6.2% test) | Committed (`v2.0-phase-8j`) |
-| 8K | Camera experience — mission-scoped no-repeat image pool, per-mission random mode (`seed: null`, logged effective seed) + MissionCamera redesigned as a live camera monitor (HUD, edge-aware labels, link states) | **Uncommitted** (see `docs/phase-8k-report.md`) |
-| 9A | Dataset assessment (read-only) — training set is ~85% outdoor, near-zero building-interior imagery | Complete |
-| 9B | Curation staging — found 58 residential + 18 indoor-training-facility real images, plus a 49-image toy-model trap | Complete |
-| 9B promotion (10A.4) | 234 images promoted into `assets/simulation_dataset/_curation/{approved,manual_review,rejected}/` | Complete, **uncommitted** |
-| 10A.1–10A.4 | Findings persisted; README dataset standard extended; Architecture-B folders built then reversed; **Architecture A decided as the sole final standard** | Complete |
-| 10B.1 | Filesystem migrated to Architecture A only | Complete |
-| Scene-aware design doc | Environment model, selection strategy, migration plan (chat-only) | Complete, **NOT implemented/approved** |
-| Demo.1–Demo.3 | Isolated demo dataset built (156→202 imgs), validated, Demo Mode switch added (1 settings flag), live-verified end to end | Complete |
-| Demo.4 | `ZoneImageProvider` recycle-boundary repetition bug fixed (12 lines, `provider.py`) | Complete |
-| Demo.5–Demo.6 | Safe category expanded 2 → 48 images from existing repo assets only (raw unused COCO pool discovered) | Complete |
-| AI.1 | Model retrained 60 epochs on GPU (RTX 3060 Ti); full old-vs-new comparison + 7-mission live validation | Complete — **B) Demo Ready with Minor Issues** |
+| 8K | Camera experience — mission-scoped no-repeat image pool, per-mission random mode (`seed: null`, logged effective seed) + MissionCamera redesigned as a live camera monitor (HUD, edge-aware labels, link states) | Committed (`0861ff0`) |
+| 9A | Dataset assessment (read-only) — training set is ~85% outdoor, near-zero building-interior imagery | Committed (`0861ff0`) |
+| 9B | Curation staging — found 58 residential + 18 indoor-training-facility real images, plus a 49-image toy-model trap | Committed (`0861ff0`) |
+| 9B promotion (10A.4) | 234 images promoted into `assets/simulation_dataset/_curation/{approved,manual_review,rejected}/` | Committed (`0861ff0`) |
+| 10A.1–10A.4 | Findings persisted; README dataset standard extended; Architecture-B folders built then reversed; **Architecture A decided as the sole final standard** | Committed (`0861ff0`) |
+| 10B.1 | Filesystem migrated to Architecture A only | Committed (`0861ff0`) |
+| Scene-aware design doc | Environment model, selection strategy, migration plan (chat-only) | Complete, **NOT implemented/approved** — no code exists for this |
+| Demo.1–Demo.3 | Isolated demo dataset built (~201 imgs), validated, Demo Mode switch added (1 settings flag), live-verified end to end | Committed (`0861ff0`) |
+| Demo.4 | `ZoneImageProvider` recycle-boundary repetition bug fixed (12 lines, `provider.py`) | Committed (`0861ff0`) |
+| Demo.5–Demo.6 | Safe category expanded from 2 to 46–48 images from existing repo assets only (raw unused COCO pool discovered) | Committed (`0861ff0`) |
+| AI.1 | Model retrained 60 epochs on GPU (RTX 3060 Ti); full old-vs-new comparison + 7-mission live validation | Committed (`0861ff0`) — **B) Demo Ready with Minor Issues** |
+| **Checkpoint** | **All of the above bundled into one commit, pushed to `origin/main`, all local V2 tags pushed** | **Complete — `0861ff0`, pushed 2026-07-05** |
 
 Data flow now: Simulation → CameraSimAdapter (zone → real image) →
 YOLODetector (ONNX) → DetectionResult → MissionState (incl. vision
 payload) → redesigned dashboard. The frontend still receives ONLY
 MissionState; REST/WebSocket contracts are unchanged; GroundTruthDetector
 remains the committed default detector.
+
+**Next priority is NOT retraining.** The confirmed bottleneck is dataset
+composition — see `docs/session-context.md` → "Next Priority" for the
+required 5-phase indoor-building dataset curation plan (fire → smoke →
+victims → safe negatives → hard negatives) that must happen before any
+further training.
 
 Full V2 detail, decisions, and next steps: `docs/session-context.md`
 (authoritative) and `docs/handoff-report.md` §0.
